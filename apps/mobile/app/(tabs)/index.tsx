@@ -639,6 +639,23 @@ function RaknaSkarm(): ReactNode {
             ) : null}
 
             <View style={styles.fyll} />
+            {/*
+              Direktiv 32: uppgiften är allmän, men ingen källa hittades.
+              Då vet användaren själv sällan bättre, och chatten kan leta
+              vidare. Knappen lägger frågan i chattens fält — den skickar
+              den inte: användaren trycker Skicka själv.
+            */}
+            {f.fragaRabbitAi === true ? (
+              <SekundarKnapp
+                titel="Låt Rabbit AI ta reda på det"
+                onPress={() => {
+                  router.navigate({
+                    pathname: '/rabbit-ai',
+                    params: { fragaText: fraga, n: String(Date.now()) },
+                  });
+                }}
+              />
+            ) : null}
             {tvetydigt ? null : (
               <PrimarKnapp
                 titel="Fortsätt"
@@ -662,7 +679,11 @@ function RaknaSkarm(): ReactNode {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.spalt}
         >
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.spalt}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={styles.spalt}
+          >
             <Fragefalt
               ref={fragefaltet}
               varde={fraga}
@@ -733,6 +754,17 @@ function RaknaSkarm(): ReactNode {
           {...(andrat !== null ? { andrat } : {})}
           antalTidigare={tidigare.length}
           onForegaende={foregaendeSvar}
+          {...(svar.uppslag !== undefined && svar.uppslag.length > 0
+            ? { uppslag: svar.uppslag }
+            : {})}
+          onRattaUppslag={(fragan, varde) => {
+            // Direktiv 32: ett uppslaget värde är ett antagande. Rättelsen
+            // går tillbaka som ett vanligt följdsvar, och servern räknar om
+            // med användarens värde i stället för sitt eget.
+            if (varde.trim() === '') return;
+            setSvar(null);
+            void rakna([...kedja, { fraga: fragan, varde: varde.trim() }]);
+          }}
           onRaknaOm={(andrade) => {
             // Ändringarna går tillbaka som svar på följdfrågor: servern tolkar
             // om med dem som extra upplysning. Appen räknar aldrig själv.

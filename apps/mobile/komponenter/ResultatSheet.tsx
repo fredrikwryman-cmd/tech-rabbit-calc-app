@@ -49,14 +49,7 @@ import { sammanfattaFakta } from '../lib/tolkning';
 import { LitenKnapp, PrimarKnapp, Textknapp } from './Knapp';
 import { Vardagsresultat } from './Resultatvyer';
 import { DinFragaKort, Stegrad } from './Kort';
-import {
-  Harlettvarde,
-  Hopfallbar,
-  Praktisktpris,
-  Redigerbartvarde,
-  Resultatrad,
-  Villkorsrad,
-} from './Resultatdelar';
+import { Harlettvarde, Hopfallbar, Praktisktpris, Redigerbartvarde, Resultatrad, Uppslagsvillkor, Villkorsrad, type Uppslaget } from './Resultatdelar';
 
 /** Avståndet från skärmens överkant, enligt KOMPONENTER.md. */
 const TOPP = 62;
@@ -87,6 +80,10 @@ export interface ResultatSheetProps {
   readonly antalTidigare?: number;
   /** Tillbaka till det förra svaret i kedjan. */
   readonly onForegaende?: () => void;
+  /** Direktiv 32: värden tjänsten slog upp, som rättbara villkor. */
+  readonly uppslag?: readonly Uppslaget[];
+  /** Rättelsen går tillbaka som ett följdsvar på uppslagets fråga. */
+  readonly onRattaUppslag?: (fraga: string, varde: string) => void;
 }
 
 export function ResultatSheet(props: ResultatSheetProps): ReactNode {
@@ -104,6 +101,8 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
     andrat,
     antalTidigare = 0,
     onForegaende,
+    uppslag = [],
+    onRattaUppslag,
   } = props;
   const { farg } = useTema();
   const rorelse = useRorelse();
@@ -231,7 +230,11 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.innehall} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={styles.innehall}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             <DinFragaKort fraga={fraga} />
 
             {/* 05d: vad som ändrades sedan förra svaret. */}
@@ -286,7 +289,13 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
 
               {villkor.length > 0 ? (
                 <Animated.View entering={FadeIn.duration(tid).delay(rorelse.reducerad ? 0 : 80)}>
-                  <Villkorsrad villkor={villkor} />
+                  {/* De uppslagna villkoren står för sig: de går att rätta. */}
+                  <Villkorsrad
+                    villkor={villkor.filter((v) => !uppslag.some((u) => u.text === v))}
+                  />
+                  {onRattaUppslag === undefined ? null : (
+                    <Uppslagsvillkor uppslag={uppslag} onRatta={onRattaUppslag} />
+                  )}
                 </Animated.View>
               ) : null}
 

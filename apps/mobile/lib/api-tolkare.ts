@@ -22,7 +22,7 @@ import type {
   Steg,
 } from '@techrabbit/engine';
 
-import type { Feltyp, Tolkare, Tolkningssvar, Val } from './tolkning';
+import type { Feltyp, Tolkare, Tolkningssvar, Uppslagsbesked, Val } from './tolkning';
 
 /** Hur länge appen väntar på svar. Servern har 30 s på sig; vi ger upp före. */
 const TIDSGRANS_MS = 25_000;
@@ -197,6 +197,24 @@ const FELTYPER: readonly Feltyp[] = [
   'server', 'rate_limited', 'unparseable', 'unsupported', 'invalid_input',
 ];
 
+/**
+ * Läser ett uppslaget villkor (direktiv 32).
+ *
+ * Allt måste finnas: texten, källan, frågan och värdet. Ett villkor utan
+ * källa får inte visas, och ett utan fråga går inte att rätta.
+ */
+function lasUppslag(ur: unknown): readonly Uppslagsbesked[] {
+  if (typeof ur !== 'object' || ur === null) return [];
+  const u = ur as Record<string, unknown>;
+  const text = typeof u['text'] === 'string' ? u['text'].trim() : '';
+  const kalla = typeof u['kalla'] === 'string' ? u['kalla'].trim() : '';
+  const fraga = typeof u['fraga'] === 'string' ? u['fraga'].trim() : '';
+  const varde = typeof u['varde'] === 'string' ? u['varde'].trim() : '';
+  const enhet = typeof u['enhet'] === 'string' ? u['enhet'].trim() : '';
+  if (text === '' || kalla === '' || fraga === '' || varde === '') return [];
+  return [{ text, kalla, fraga, varde, enhet }];
+}
+
 /** Läser tjänstens svar. Allt som inte stämmer blir 'kunde-inte-tolka'. */
 export function lasSvar(v: unknown): Tolkningssvar {
   const avbrutet: Tolkningssvar = { sort: 'fel', fel: 'kunde-inte-tolka' };
@@ -241,6 +259,7 @@ export function lasSvar(v: unknown): Tolkningssvar {
       // Ett ensamt val är ingen valsituation: då är det ett vanligt fält.
       ...(choices.length >= 2 ? { choices } : {}),
       ...(d['kant'] !== undefined ? { kant: d['kant'] } : {}),
+      ...(d['fragaRabbitAi'] === true ? { fragaRabbitAi: true } : {}),
     };
   }
 
@@ -253,6 +272,11 @@ export function lasSvar(v: unknown): Tolkningssvar {
       etikett: text(d['etikett']) ?? resultat.betydelse,
       resultat,
       forklaring,
+      // Ett uppslag som inte går att läsa tas bort, precis som villkorsraden:
+      // ett resultat utan rättbart villkor är bättre än inget resultat.
+      ...(Array.isArray(d['uppslag']) && d['uppslag'].flatMap(lasUppslag).length > 0
+        ? { uppslag: d['uppslag'].flatMap(lasUppslag) }
+        : {}),
     };
   }
 

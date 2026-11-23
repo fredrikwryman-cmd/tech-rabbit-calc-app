@@ -6,7 +6,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTema } from '../design/tema';
@@ -16,6 +16,7 @@ import { lasVersion } from '../lib/version';
 
 import { Bakgrund } from './Bakgrund';
 import { Logotyp } from './Logotyp';
+import { Klarrad } from './Tangentbord';
 
 const HUVUDHOJD = Number(SIZE['headerRow'] ?? 44);
 
@@ -141,8 +142,21 @@ export function Skarm({ rubrik, stor, vaxlare, children }: SkarmProps): ReactNod
           {rubrik}
         </Text>
         )}
-        <View style={styles.yta}>{children}</View>
+        {/*
+          Ett tryck utanfor faltet stanger tangentbordet (direktiv 32).
+          Pressable omsluter bara ytan: barnen tar sina egna tryck, sa
+          knappar och kort fungerar precis som forut.
+        */}
+        <Pressable
+          accessible={false}
+          onPress={() => Keyboard.dismiss()}
+          style={styles.yta}
+        >
+          {children}
+        </Pressable>
       </View>
+      {/* Raden med Klar, for skarmens falt. */}
+      <Klarrad />
     </Bakgrund>
   );
 }

@@ -29,6 +29,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
+import { KLAR_ID_ARK } from './Tangentbord';
 import { useTema } from '../design/tema';
 import { TEXT } from '../design/tokens';
 import { REDUCERAD_MS, useRorelse, YTA_MS } from '../lib/rorelse';
@@ -157,6 +158,127 @@ export function Villkorsrad({ villkor }: { readonly villkor: readonly string[] }
     >
       {villkor.join(' · ')}
     </Text>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Uppslagna villkor (direktiv 32)
+// ---------------------------------------------------------------------------
+
+/** Ett värde tjänsten slog upp själv, med källa. */
+export interface Uppslaget {
+  readonly text: string;
+  readonly kalla: string;
+  readonly fraga: string;
+  readonly varde: string;
+  readonly enhet: string;
+}
+
+/**
+ * Villkoret som går att rätta.
+ *
+ * Tjänsten slog upp värdet — restid, avstånd, bränslepris — och visar det
+ * med sin källa. Ett uppslaget värde är ett antagande, så raden är tryckbar:
+ * den öppnar ett fält med värdet ifyllt, och Räkna om skickar rättelsen som
+ * ett vanligt följdsvar. Appen räknar aldrig själv.
+ */
+export function Uppslagsvillkor({
+  uppslag,
+  onRatta,
+}: {
+  readonly uppslag: readonly Uppslaget[];
+  readonly onRatta: (fraga: string, varde: string) => void;
+}): ReactNode {
+  const { farg } = useTema();
+  const [oppet, setOppet] = useState<string | null>(null);
+  const [varde, setVarde] = useState('');
+  if (uppslag.length === 0) return null;
+
+  return (
+    <View style={styles.uppslag}>
+      {uppslag.map((u) => (
+        <View key={u.fraga}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${u.text}. Tryck för att ändra värdet.`}
+            onPress={() => {
+              setVarde(u.varde);
+              setOppet(oppet === u.fraga ? null : u.fraga);
+            }}
+            style={({ pressed }) => [
+              styles.uppslagsrad,
+              {
+                backgroundColor: farg['inset'],
+                borderColor: farg['controlBorder'],
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}
+          >
+            <Text
+              maxFontSizeMultiplier={1.5}
+              style={[TEXT['secondary'], styles.fyll, { color: farg['muted'] }]}
+            >
+              {u.text}
+            </Text>
+            <Text maxFontSizeMultiplier={1.3} style={[TEXT['meta'], { color: farg['greenIcon'] }]}>
+              {oppet === u.fraga ? 'Stäng' : 'Ändra'}
+            </Text>
+          </Pressable>
+
+          {oppet === u.fraga ? (
+            <View style={styles.uppslagsfalt}>
+              <View
+                style={[
+                  styles.uppslagsruta,
+                  { backgroundColor: farg['inset'], borderColor: farg['greenIcon'] },
+                ]}
+              >
+                <TextInput
+                  value={varde}
+                  onChangeText={setVarde}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  inputAccessoryViewID={KLAR_ID_ARK}
+                  autoFocus
+                  accessibilityLabel={`${u.fraga} i ${u.enhet}`}
+                  maxFontSizeMultiplier={1.4}
+                  style={[TEXT['input'], styles.fyll, { color: farg['text'] }]}
+                />
+                <Text maxFontSizeMultiplier={1.3} style={[TEXT['meta'], { color: farg['muted'] }]}>
+                  {u.enhet}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Räkna om"
+                disabled={varde.trim() === ''}
+                onPress={() => {
+                  setOppet(null);
+                  onRatta(u.fraga, varde.trim());
+                }}
+                style={({ pressed }) => [
+                  styles.uppslagsknapp,
+                  {
+                    backgroundColor: varde.trim() === '' ? farg['track'] : farg['greenIcon'],
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={[
+                    TEXT['meta'],
+                    { color: varde.trim() === '' ? farg['faint'] : farg['onGreen'] },
+                  ]}
+                >
+                  Räkna om
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -325,6 +447,7 @@ export function Redigerbartvarde({
           onBlur={() => setFokus(false)}
           keyboardType="decimal-pad"
           returnKeyType="done"
+          inputAccessoryViewID={KLAR_ID_ARK}
           accessibilityLabel={`${etikett} i ${enhet}`}
           maxFontSizeMultiplier={1.4}
           style={[TEXT['input'], styles.faltvarde, { color: farg['text'] }]}
@@ -528,6 +651,36 @@ const styles = StyleSheet.create({
   sammanfattning: { marginTop: 2 },
 
   villkor: { marginTop: 6 },
+  uppslag: { marginTop: 8, gap: 8 },
+  uppslagsrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  uppslagsfalt: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  uppslagsruta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 2,
+    paddingHorizontal: 12,
+  },
+  uppslagsknapp: {
+    minHeight: 48,
+    minWidth: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
 
   praktiskt: { marginTop: 13, paddingTop: 13, borderTopWidth: StyleSheet.hairlineWidth },
   praktisktRad: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },

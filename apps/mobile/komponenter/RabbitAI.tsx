@@ -45,6 +45,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTema } from '../design/tema';
+import { KLAR_ID_CHAT, KLAR_ID_PANEL, Klarrad } from './Tangentbord';
 import { TEXT } from '../design/tokens';
 import { samtalsrubrik, tidKvar, type Kalla, type Meddelande, type Samtal } from '../lib/chatt';
 import { visaDatum } from '../lib/lagring';
@@ -200,6 +201,7 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
         <ScrollView
           ref={traden}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.trad}
           onScroll={(e) => {
             const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -263,6 +265,7 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
             onChangeText={onUtkast}
             editable={!avstangt}
             placeholder={avstangt ? 'Dagens frågor är slut' : 'Fråga Rabbit AI …'}
+            inputAccessoryViewID={KLAR_ID_CHAT}
             placeholderTextColor={farg['faint']}
             multiline
             accessibilityLabel="Din fråga"
@@ -343,6 +346,8 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
         }}
         onTaBort={onTaBortSamtal}
       />
+      {/* Chattens Klar-rad: stanger tangentbordet utan att skicka. */}
+      <Klarrad id={KLAR_ID_CHAT} />
     </KeyboardAvoidingView>
   );
 }
@@ -938,6 +943,7 @@ function Samtalspanel({
             value={sok}
             onChangeText={setSok}
             placeholder="Sök i samtal"
+            inputAccessoryViewID={KLAR_ID_PANEL}
             placeholderTextColor={farg['faint']}
             accessibilityLabel="Sök i samtal"
             maxFontSizeMultiplier={1.5}
@@ -945,7 +951,11 @@ function Samtalspanel({
           />
         </View>
 
-        <ScrollView contentContainerStyle={styles.panellista} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.panellista}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           {traff.length === 0 ? (
             <Text maxFontSizeMultiplier={1.6} style={[TEXT['body'], { color: farg['muted'] }]}>
               {samtal.length === 0 ? 'Inga samtal än.' : 'Inget samtal matchar sökningen.'}
@@ -985,6 +995,8 @@ function Samtalspanel({
             ))
           )}
         </ScrollView>
+        {/* Panelens egen Klar-rad: sokfaltet ligger i ett eget trad. */}
+        <Klarrad id={KLAR_ID_PANEL} />
 
         <Pressable
           accessibilityRole="button"

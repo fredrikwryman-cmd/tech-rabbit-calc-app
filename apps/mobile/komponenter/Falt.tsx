@@ -14,6 +14,7 @@ import { forwardRef, type ReactNode } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 
 import { useTema } from '../design/tema';
+import { KLAR_ID } from './Tangentbord';
 import { TEXT } from '../design/tokens';
 
 export interface FragefaltProps {
@@ -64,6 +65,7 @@ export const Fragefalt = forwardRef<TextInputInstance, FragefaltProps>(function 
         placeholderTextColor={farg['faint']}
         accessibilityLabel="Din fråga"
         accessibilityHint="Skriv vad du vill räkna ut, på vanlig svenska."
+        inputAccessoryViewID={KLAR_ID}
         maxFontSizeMultiplier={1.8}
         textAlignVertical="top"
         style={[TEXT['input'], styles.fragetext, { color: farg['text'] }]}
@@ -99,6 +101,8 @@ export const Svarsfalt = forwardRef<TextInputInstance, SvarsfaltProps>(function 
         value={varde}
         onChangeText={onChange}
         keyboardType="decimal-pad"
+        // Sifferknappsatsen har ingen returtangent: Klar-raden ar vagen ut.
+        inputAccessoryViewID={KLAR_ID}
         autoFocus={autoFokus}
         accessibilityLabel={etikett}
         accessibilityHint={`Svaret anges i ${enhet}.`}

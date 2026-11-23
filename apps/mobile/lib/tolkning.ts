@@ -42,6 +42,26 @@ export interface Foljdfraga {
    * tillståndslös och äger inget mellan två anrop.
    */
   readonly kant?: unknown;
+  /**
+   * Direktiv 32: uppgiften är allmän, men ingen källa hittades. Vyn visar
+   * då också "Låt Rabbit AI ta reda på det". En personlig uppgift får
+   * aldrig den knappen: ingen sökning vet vad användaren tar i timmen.
+   */
+  readonly fragaRabbitAi?: boolean;
+}
+
+/**
+ * Ett värde tjänsten slog upp själv, visat som villkor med källa.
+ *
+ * `fraga` och `varde` hör ihop: villkoret är tryckbart, öppnar ett fält med
+ * `varde` ifyllt, och rättelsen går tillbaka som ett följdsvar på `fraga`.
+ */
+export interface Uppslagsbesked {
+  readonly text: string;
+  readonly kalla: string;
+  readonly fraga: string;
+  readonly varde: string;
+  readonly enhet: string;
 }
 
 /** Ett färdigt svar: motorn har räknat, AI:n har förklarat. */
@@ -53,6 +73,8 @@ export interface Svar {
   readonly resultat: Resultat;
   /** Förklaringen i löpande text. AI:n skriver den, motorn räknar. */
   readonly forklaring: string;
+  /** Direktiv 32: värden tjänsten slog upp. Tomt när inget slogs upp. */
+  readonly uppslag?: readonly Uppslagsbesked[];
 }
 
 /**

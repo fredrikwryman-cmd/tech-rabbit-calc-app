@@ -25,6 +25,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
+import { KLAR_ID_ARK, Klarrad } from './Tangentbord';
 import { useTema } from '../design/tema';
 import { SKARMMARGINAL, TEXT } from '../design/tokens';
 import { REDUCERAD_MS, SKARM_MS, useRorelse } from '../lib/rorelse';
@@ -110,10 +111,15 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.fyll}
           >
-            <ScrollView contentContainerStyle={styles.innehall} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              contentContainerStyle={styles.innehall}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               {children}
             </ScrollView>
             {fot === undefined ? null : <View style={styles.fot}>{fot}</View>}
+            <Klarrad id={KLAR_ID_ARK} />
           </KeyboardAvoidingView>
         </Animated.View>
       </View>

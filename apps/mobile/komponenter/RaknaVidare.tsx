@@ -21,6 +21,7 @@ import {
   type TextInputInstance,
 } from 'react-native';
 
+import { KLAR_ID_ARK } from './Tangentbord';
 import { useTema } from '../design/tema';
 import { TEXT } from '../design/tokens';
 import { useHaptik } from '../lib/rorelse';
@@ -113,6 +114,7 @@ export function RaknaVidareSheet(props: RaknaVidareSheetProps): ReactNode {
             color: farg['text'],
           },
         ]}
+        inputAccessoryViewID={KLAR_ID_ARK}
       />
 
       <View style={styles.forslagsrad}>
