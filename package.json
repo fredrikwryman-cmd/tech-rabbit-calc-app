@@ -1,0 +1,20 @@
+{
+  "name": "tech-rabbit-calc-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tech Rabbit Calc — appen. Servern ligger i ett privat repo.",
+  "workspaces": [
+    "apps/mobile",
+    "packages/engine"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

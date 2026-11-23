@@ -1,0 +1,77 @@
+# Bygger appen och laddar upp den till TestFlight.
+#
+# Kör på GitHub Actions macOS-körare, som är gratis för publika repon.
+# Bygget sker LOKALT på köraren (eas build --local), så EAS-kvoten för
+# molnbyggen rörs inte. Signeringen hämtas från EAS, där certifikatet och
+# profilen redan ligger.
+#
+# Startas för hand: Actions -> TestFlight -> Run workflow.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      meddelande:
+        description: 'Vad bygget innehåller (syns i loggen)'
+        required: false
+        default: 'Nytt bygge'
+
+jobs:
+  bygg:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Hämta koden
+        uses: actions/checkout@v4
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+
+      - name: Installera beroenden
+        # install, inte ci: det publika repot har en egen rot-package.json
+        # och ingen låsfil från det privata monorepot.
+        run: npm install --no-audit --no-fund
+
+      - name: Kontroller
+        run: |
+          npm test
+          npm run typecheck
+
+      - name: EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Bygg lokalt för TestFlight
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # Adressen står inte i repot. Den kommer in här, vid bygget.
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+        run: |
+          eas build --local --platform ios --profile production --non-interactive --output "$RUNNER_TEMP/techrabbit.ipa"
+
+      - name: Lägg App Store Connect-nyckeln på plats
+        env:
+          ASC_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "$ASC_P8" > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Ladda upp till App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app -f "$RUNNER_TEMP/techrabbit.ipa" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Spara bygget som artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: ${{ runner.temp }}/techrabbit.ipa
+          if-no-files-found: ignore
