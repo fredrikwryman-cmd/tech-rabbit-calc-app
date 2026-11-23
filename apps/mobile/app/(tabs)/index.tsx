@@ -479,6 +479,26 @@ function RaknaSkarm(): ReactNode {
         }}
       />
     );
+    /**
+     * Direktiv 30: ingen återvändsgränd.
+     *
+     * 06d och 06e hade bara "Skriv om frågan", och en fråga räknaren inte
+     * har ett räknesätt för blir inte bättre av att skrivas om. Rabbit AI
+     * kan söka upp det som saknas, eller svara själv. Knappen byter flik och
+     * lägger frågan i chattens fält — användaren trycker Skicka själv, så
+     * ingen fråga skickas i någons rygg.
+     */
+    const fragaRabbit = (
+      <SekundarKnapp
+        titel="Fråga Rabbit AI"
+        onPress={() => {
+          router.navigate({
+            pathname: '/rabbit-ai',
+            params: { fragaText: fraga, n: String(Date.now()) },
+          });
+        }}
+      />
+    );
     // Frågan ligger alltid kvar, i varje felvy.
     return (
       <Skarm>
@@ -503,6 +523,7 @@ function RaknaSkarm(): ReactNode {
               sort === '06d' || sort === '06e' || sort === '06f' ? (
                 <>
                   {skrivOm}
+                  {sort === '06d' || sort === '06e' ? fragaRabbit : null}
                   {igen ? <SekundarKnapp titel="Försök igen" onPress={() => void rakna()} /> : null}
                 </>
               ) : (

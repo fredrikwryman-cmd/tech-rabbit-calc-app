@@ -17,7 +17,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { kallorUr, Sselasare, type Kalla } from './chatt-karna.ts';
+import { kallorUr, las429, Sselasare, type Kalla, type Taksvar } from './chatt-karna.ts';
 
 export { tidKvar } from './chatt-karna.ts';
 export type { Kalla } from './chatt-karna.ts';
@@ -162,8 +162,12 @@ export type Chattslut =
       readonly kallor?: readonly Kalla[];
     }
   | { readonly sort: 'stoppat' }
-  /** Dagens frågor är slut (12d). `nollstallsOm` är sekunder till midnatt. */
-  | { readonly sort: 'slut'; readonly nollstallsOm: number }
+  /**
+   * Serverns tak: dagens frågor slut (12d) eller för många på kort tid
+   * (direktiv 30). Båda formerna och tolkningen av dem bor i `Taksvar`, så
+   * att appen och kroppen servern skickar inte kan glida isär.
+   */
+  | Taksvar
   | { readonly sort: 'fel'; readonly typ: 'server' | 'ingen-anslutning' };
 
 export interface Chattlyssnare {
@@ -231,16 +235,11 @@ export function stromma(
   };
 
   xhr.onload = (): void => {
-    // 429: dagens frågor är slut. Kroppen är JSON, inte en ström.
+    // 429: antingen dygnstaket per telefon, eller minuttaket per IP
+    // (direktiv 30). Kroppen är JSON, inte en ström, och `las429` avgör
+    // vilket taket var: det ena släpper vid midnatt, det andra inom en minut.
     if (xhr.status === 429) {
-      let sekunder = 0;
-      try {
-        const k = JSON.parse(xhr.responseText) as Record<string, unknown>;
-        if (typeof k['nollstallsOm'] === 'number') sekunder = k['nollstallsOm'];
-      } catch {
-        // Utan siffra visas beskedet ändå, bara utan tid.
-      }
-      avsluta({ sort: 'slut', nollstallsOm: sekunder });
+      avsluta(las429(xhr.responseText));
       return;
     }
     if (xhr.status !== 200) {

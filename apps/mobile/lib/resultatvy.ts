@@ -49,6 +49,11 @@ function faktum(resultat: Resultat, nyckel: Faktumnyckel): Rad | null {
  * Ordningen spelar roll bara om två räknesätt skulle dela en nyckel. I dag
  * gör de inte det, och nycklarna prövas i vyernas ordning så att ett framtida
  * räknesätt inte tyst kapar en vy som redan finns.
+ *
+ * `timeShift` (direktiv 30) lämnar `restid`, `avresa` och `ankomst` och
+ * hamnar därför i 'standard'. Det är avsiktligt: designen har ingen vy 34,
+ * och ett klockslag är ett svar vy 05 visar bra — talet står i `formatted`
+ * och enheten är tom. Ingen nyckel ska läggas till här för den.
  */
 export function valjVy(resultat: Resultat): Vysort {
   if (harNyckel(resultat, 'perEnhet') && harNyckel(resultat, 'skillnad')) return 'jamforpris';

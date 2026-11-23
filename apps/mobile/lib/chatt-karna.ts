@@ -118,3 +118,49 @@ export function tidKvar(sekunder: number): string {
   if (m > 0) return `${m} min`;
   return 'en stund';
 }
+
+/**
+ * Serverns två tak, lästa ur samma 429-svar.
+ *
+ * Direktiv 30: /api/chat har numera två gränser. Dygnstaket per enhet
+ * släpper vid midnatt (vy 21e), minuttaket per IP släpper inom en minut.
+ * Båda svarar 429, och det enda som skiljer dem är kroppen — så beskedet
+ * till användaren hänger på att den läses rätt. Därför ligger tolkningen
+ * här, utan XHR, och inte inuti `xhr.onload`.
+ */
+export type Taksvar =
+  /** Dagens frågor är slut (vy 21e). `nollstallsOm` är sekunder till midnatt. */
+  | { readonly sort: 'slut'; readonly nollstallsOm: number }
+  /** För många frågor på kort tid. `retryAfter` är sekunder till nästa fönster. */
+  | { readonly sort: 'for-snabbt'; readonly retryAfter: number };
+
+/**
+ * Vilket tak som slog i, ur 429-kroppen.
+ *
+ * `typ: "rate_limited"` är minuttaket; allt annat är dygnstaket, också en
+ * kropp som saknas eller är trasig. Att hellre säga "dagens frågor är slut"
+ * än att gissa en väntetid är medvetet: dygnsbeskedet bär en tid som kan
+ * vara noll utan att bli fel ("en stund"), medan ett minutbesked utan
+ * sekunder låter som om något gått sönder.
+ *
+ * Ett tal som inte är ett positivt, ändligt tal blir 0, och då visas
+ * beskedet utan tid i stället för med "NaN".
+ */
+export function las429(kroppstext: string): Taksvar {
+  let kropp: Record<string, unknown> = {};
+  try {
+    const tolkat: unknown = JSON.parse(kroppstext);
+    if (typeof tolkat === 'object' && tolkat !== null) {
+      kropp = tolkat as Record<string, unknown>;
+    }
+  } catch {
+    // Utan kropp visas beskedet ändå, bara utan tid.
+  }
+  const sekunder = (varde: unknown): number =>
+    typeof varde === 'number' && Number.isFinite(varde) && varde > 0 ? varde : 0;
+
+  if (kropp['typ'] === 'rate_limited') {
+    return { sort: 'for-snabbt', retryAfter: sekunder(kropp['retryAfter']) };
+  }
+  return { sort: 'slut', nollstallsOm: sekunder(kropp['nollstallsOm']) };
+}

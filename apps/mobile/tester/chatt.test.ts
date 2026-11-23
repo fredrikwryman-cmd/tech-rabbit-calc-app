@@ -8,7 +8,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it, test } from 'node:test';
 
-import { domanUr, kallorUr, Sselasare, tidKvar } from '../lib/chatt-karna.ts';
+import { domanUr, kallorUr, las429, Sselasare, tidKvar } from '../lib/chatt-karna.ts';
 
 function block(namn: string, kropp: unknown): string {
   return `event: ${namn}\ndata: ${JSON.stringify(kropp)}\n\n`;
@@ -197,4 +197,51 @@ test('domanUr tar bort www, port och versaler', () => {
   assert.equal(domanUr('https://WWW.Exempel.SE:8443/sida'), 'exempel.se');
   assert.equal(domanUr('http://a.b.c/x'), 'a.b.c');
   assert.equal(domanUr('inte en adress'), '');
+});
+
+/**
+ * 429 har två betydelser (direktiv 30), och bara kroppen skiljer dem.
+ *
+ * Läses den fel får användaren "dagens frågor är slut" för ett tak som
+ * släpper om tio sekunder — eller tvärtom en väntan på en minut när kvoten
+ * i själva verket är slut till midnatt.
+ */
+test('las429: minuttaket känns igen på typ och bär sina sekunder', () => {
+  const svar = las429(JSON.stringify({ sort: 'fel', typ: 'rate_limited', retryAfter: 42 }));
+  assert.deepEqual(svar, { sort: 'for-snabbt', retryAfter: 42 });
+});
+
+test('las429: dygnstaket ar standardtolkningen', () => {
+  assert.deepEqual(las429(JSON.stringify({ nollstallsOm: 3600 })), {
+    sort: 'slut',
+    nollstallsOm: 3600,
+  });
+});
+
+test('las429: en annan feltyp ar inte minuttaket', () => {
+  assert.deepEqual(las429(JSON.stringify({ typ: 'overloaded', nollstallsOm: 10 })), {
+    sort: 'slut',
+    nollstallsOm: 10,
+  });
+});
+
+test('las429: trasig, tom och icke-objektkropp ger dygnsbeskedet utan tid', () => {
+  for (const kropp of ['{detta ar inte json', '', 'null', '"text"', '7']) {
+    assert.deepEqual(las429(kropp), { sort: 'slut', nollstallsOm: 0 }, kropp);
+  }
+});
+
+test('las429: tal som inte ar tal blir noll i stallet for NaN', () => {
+  assert.deepEqual(las429(JSON.stringify({ typ: 'rate_limited', retryAfter: 'snart' })), {
+    sort: 'for-snabbt',
+    retryAfter: 0,
+  });
+  assert.deepEqual(las429(JSON.stringify({ typ: 'rate_limited' })), {
+    sort: 'for-snabbt',
+    retryAfter: 0,
+  });
+  assert.deepEqual(las429(JSON.stringify({ nollstallsOm: -5 })), {
+    sort: 'slut',
+    nollstallsOm: 0,
+  });
 });

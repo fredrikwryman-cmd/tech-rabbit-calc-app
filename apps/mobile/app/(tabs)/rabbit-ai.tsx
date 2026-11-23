@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { medFelgrans } from '../../komponenter/Felgrans';
@@ -31,6 +31,8 @@ import { useHaptik } from '../../lib/rorelse';
 
 function RabbitAiSkarm(): ReactNode {
   const router = useRouter();
+  /** Direktiv 30: frågan Räkna skickade hit från en felvy (06d och 06e). */
+  const parametrar = useLocalSearchParams<{ fragaText?: string; n?: string }>();
   const haptik = useHaptik();
   const insets = useSafeAreaInsets();
 
@@ -55,6 +57,24 @@ function RabbitAiSkarm(): ReactNode {
     // Avbryt en pågående strömning när skärmen lämnas för gott.
     return () => stromningen.current?.stoppa();
   }, []);
+
+  /**
+   * Frågan Räkna lämnade över läggs i fältet — den skickas inte.
+   *
+   * Direktiv 30: felvyerna 06d och 06e har knappen "Fråga Rabbit AI". Den
+   * ska lämna frågan redo att skicka, inte skicka den: användaren ska se
+   * vad som går i väg och kunna ändra den först. `n` är ett löpnummer, så
+   * att samma fråga går att skicka hit igen.
+   */
+  const senasteFran = useRef<string>('');
+  useEffect(() => {
+    const text = parametrar.fragaText;
+    const n = parametrar.n ?? '';
+    if (typeof text !== 'string' || text.trim() === '') return;
+    if (senasteFran.current === n) return;
+    senasteFran.current = n;
+    setUtkast(text.trim());
+  }, [parametrar.fragaText, parametrar.n]);
 
   // Samtalen läses om varje gång fliken visas, så panelen aldrig är inaktuell.
   const hamtaSamtal = useCallback(() => {
@@ -110,6 +130,21 @@ function RabbitAiSkarm(): ReactNode {
           if (slut.sort === 'slut') {
             setSlutOm(slut.nollstallsOm);
             void sparaSamtal(trad);
+            return;
+          }
+          // Minuttaket per IP (direktiv 30). Det släpper inom en minut, så
+          // frågan är kvar och svaret säger hur länge — dygnsvyn 21e vore
+          // fel besked för ett tak som gäller en stund.
+          if (slut.sort === 'for-snabbt') {
+            haptik('varning');
+            const sekunder = Math.max(1, Math.ceil(slut.retryAfter));
+            const svar: Meddelande = {
+              roll: 'du',
+              text: `För många frågor på kort tid. Försök igen om ${sekunder} sekunder — frågan är kvar.`,
+            };
+            const hela = [...trad, svar];
+            setMeddelanden(hela);
+            void sparaSamtal(hela);
             return;
           }
           if (slut.sort === 'fel') {

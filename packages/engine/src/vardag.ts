@@ -1,5 +1,7 @@
 /**
- * Fyra vardagliga räknesätt: vyerna 30–33 i design v4.
+ * Fem vardagliga räknesätt. De fyra första har en egen vy i design v4
+ * (vyerna 30–33); det femte, `timeShift`, visas i vy 05 som vanliga svar,
+ * för ett klockslag behöver ingen egen layout.
  *
  * - `comparePrices` (30): jämförpris per kg, l eller st, och vilken vara som
  *   är billigast — med skillnaden i både kronor och procent.
@@ -9,6 +11,8 @@
  *   och vad som blir över.
  * - `workTime` (33): arbetad tid per dag och i summa, och lönen när timlönen
  *   är känd.
+ * - `timeShift` (vy 05): ett klockslag plus eller minus en tid — när man
+ *   måste åka för att vara framme i tid, eller när man är framme.
  *
  * Ren TypeScript, inga beroenden. Avrundning enligt F01: det exakta talet
  * ligger i `value`, och när ett heltal krävs — förpackningar går inte att
@@ -690,6 +694,163 @@ export function workTime(dagar: readonly Arbetsdag[], alternativ?: WorkTimeAlter
     steps,
     ...(villkor.length > 0 ? { villkor } : {}),
     ...(rader.length > 0 ? { rader } : {}),
+    fakta,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 34. Klockslag ± tid
+// ---------------------------------------------------------------------------
+
+export interface TimeShiftAlternativ {
+  /** Tiden som ska läggas till eller dras av: timmarna. */
+  readonly timmar?: number;
+  /** Tiden som ska läggas till eller dras av: minuterna. */
+  readonly minuter?: number;
+  /** Extra tid som läggs till restiden, t.ex. "med 15 min marginal". */
+  readonly marginal?: number;
+  /**
+   * Vad frågan frågar efter.
+   *
+   * `avresa` räknar bakåt: ankomsttiden minus restiden är när man måste åka.
+   * `ankomst` räknar framåt: avresan plus restiden är när man är framme.
+   * Standard är `avresa`, för det är den frågan folk ställer.
+   */
+  readonly riktning?: 'avresa' | 'ankomst';
+}
+
+/** "13:10" ur minuter sedan midnatt. Dygnet rullar runt. */
+export function formatKlockslag(minuterSedanMidnatt: number): string {
+  const inom = ((Math.round(minuterSedanMidnatt) % 1440) + 1440) % 1440;
+  const t = Math.trunc(inom / 60);
+  const m = inom % 60;
+  return `${String(t).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Ett klockslag plus eller minus en tid.
+ *
+ * "Framme 15:15, restiden är 1 h 50 min, när ska jag åka?" är ankomst minus
+ * restid. Åt andra hållet är avresa plus restid lika med ankomst. En marginal
+ * läggs alltid TILL restiden: den ska göra svaret säkrare, inte tightare, i
+ * båda riktningarna.
+ *
+ * Går räkningen över midnatt rullar klockan runt och svaret bär ett villkor
+ * som säger vilket dygn det gäller. Ett klockslag har inget datum, och att
+ * svara "−00:45" vore sämre än att säga "23:15, dagen före".
+ */
+export function timeShift(tid: string, alternativ?: TimeShiftAlternativ): Resultat {
+  const start = klockslag(tid);
+  const timmar = Math.max(0, kravTal(alternativ?.timmar ?? 0, 'Timmarna'));
+  const minuter = Math.max(0, kravTal(alternativ?.minuter ?? 0, 'Minuterna'));
+  const marginal = Math.max(0, kravTal(alternativ?.marginal ?? 0, 'Marginalen'));
+  const riktning = alternativ?.riktning ?? 'avresa';
+
+  const restid = timmar * 60 + minuter;
+  if (restid <= 0) {
+    throw new RaknefelError(
+      'ogiltigt-uttryck',
+      'Utan en restid finns det ingen tid att lägga till eller dra av.',
+    );
+  }
+  const hela = restid + marginal;
+
+  const tecken = riktning === 'avresa' ? -1 : 1;
+  const rakt = start + tecken * hela;
+  const svaret = ((rakt % 1440) + 1440) % 1440;
+  // Hela dygn förbi midnatt. −1 betyder dagen före, +1 nästa dag.
+  const dygn = Math.floor(rakt / 1440);
+
+  const startText = formatKlockslag(start);
+  const svarText = formatKlockslag(svaret);
+  const restidText = formatArbetstid(restid);
+  const helaText = formatArbetstid(hela);
+
+  const steps: Steg[] = [
+    {
+      nr: 1,
+      etikett: 'Restid',
+      uttryck: timmar > 0 && minuter > 0
+        ? `${formatTal(timmar)} h + ${formatTal(minuter)} min`
+        : restidText,
+      resultat: restidText,
+    },
+  ];
+  if (marginal > 0) {
+    steps.push({
+      nr: steps.length + 1,
+      etikett: 'Med marginal',
+      uttryck: `${restidText} + ${formatTal(marginal)} min`,
+      resultat: helaText,
+    });
+  }
+  steps.push({
+    nr: steps.length + 1,
+    etikett: riktning === 'avresa' ? 'Avresa' : 'Ankomst',
+    uttryck: `${startText} ${riktning === 'avresa' ? '−' : '+'} ${helaText}`,
+    resultat: svarText,
+  });
+
+  const fakta: Faktum[] = [
+    {
+      nyckel: 'restid',
+      betydelse: 'Restid',
+      value: restid / 60,
+      formatted: restidText,
+      unit: '',
+    },
+    ...(marginal > 0
+      ? [
+          {
+            nyckel: 'marginal' as const,
+            betydelse: 'Marginal',
+            value: marginal,
+            formatted: formatTal(marginal),
+            unit: 'min',
+          },
+        ]
+      : []),
+    {
+      nyckel: riktning === 'avresa' ? ('ankomst' as const) : ('avresa' as const),
+      betydelse: riktning === 'avresa' ? 'Framme senast' : 'Avresa',
+      value: start / 60,
+      formatted: startText,
+      unit: '',
+    },
+    {
+      nyckel: riktning === 'avresa' ? ('avresa' as const) : ('ankomst' as const),
+      betydelse: riktning === 'avresa' ? 'Senast dags att åka' : 'Framme',
+      value: svaret / 60,
+      formatted: svarText,
+      unit: '',
+    },
+    {
+      nyckel: 'resultat',
+      betydelse: riktning === 'avresa' ? 'Senast dags att åka' : 'Framme',
+      value: svaret / 60,
+      formatted: svarText,
+      unit: '',
+    },
+  ];
+
+  const villkor: string[] = [
+    riktning === 'avresa'
+      ? `Framme senast ${startText}, restid ${restidText}`
+      : `Avresa ${startText}, restid ${restidText}`,
+  ];
+  if (marginal > 0) villkor.push(`${formatTal(marginal)} minuters marginal är inräknad`);
+  if (dygn < 0) villkor.push('Tiden ligger dagen före');
+  if (dygn > 0) villkor.push('Tiden ligger dygnet efter');
+
+  return {
+    value: svaret / 60,
+    // Tom enhet: `formatted` bär klockslaget, och resultatvyn sätter enheten
+    // efter talet. "13:10 h" vore fel (samma skäl som i workTime).
+    unit: '',
+    formatted: svarText,
+    betydelse: riktning === 'avresa' ? 'Senast dags att åka' : 'Framme',
+    steps,
+    villkor,
     fakta,
   };
 }

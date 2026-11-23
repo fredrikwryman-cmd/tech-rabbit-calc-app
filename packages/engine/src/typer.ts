@@ -64,7 +64,9 @@ export type Faktumnyckel =
   // Direktiv 22: rabatter, baklanges fran ett mal, aterkommande kostnader,
   // resekostnad och antal salda for break-even.
   | 'pris' | 'rabatt' | 'sparat' | 'mal' | 'period'
-  | 'strecka' | 'forbrukning' | 'antal' | 'tackning';
+  | 'strecka' | 'forbrukning' | 'antal' | 'tackning'
+  // Direktiv 30: klockslag plus eller minus en tid.
+  | 'restid' | 'avresa' | 'ankomst';
 
 /**
  * Alla giltiga nycklar, som värden.
@@ -85,6 +87,7 @@ export const FAKTUMNYCKLAR = [
   'arbetstid', 'lon',
   'pris', 'rabatt', 'sparat', 'mal', 'period',
   'strecka', 'forbrukning', 'antal', 'tackning',
+  'restid', 'avresa', 'ankomst',
 ] as const satisfies readonly Faktumnyckel[];
 
 /** Sant när strängen är en nyckel motorn känner. */
