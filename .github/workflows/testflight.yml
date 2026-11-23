@@ -1,9 +1,16 @@
-# Bygger appen och laddar upp den till TestFlight.
+# Bygger appen, laddar upp den till App Store Connect och väntar på
+# Apples bekräftelse.
 #
 # Kör på GitHub Actions macOS-körare, som är gratis för publika repon.
 # Bygget sker LOKALT på köraren (eas build --local), så EAS-kvoten för
 # molnbyggen rörs inte. Signeringen hämtas från EAS, där certifikatet och
 # profilen redan ligger.
+#
+# Direktiv 29: körning #1 fick grön bock och altool sa UPLOAD SUCCEEDED,
+# men inget bygge syntes i TestFlight. Grönt på uppladdningen betyder bara
+# att Apple TOG EMOT filen — inte att den blev ett bygge. Därför slutar
+# arbetsflödet nu med att fråga App Store Connect om bygget finns, och
+# faller med rött kryss om det inte gör det.
 #
 # Startas för hand: Actions -> TestFlight -> Run workflow.
 name: TestFlight
@@ -19,7 +26,7 @@ on:
 jobs:
   bygg:
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Hämta koden
         uses: actions/checkout@v4
@@ -28,7 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
 
       - name: Installera beroenden
         # install, inte ci: det publika repot har en egen rot-package.json
@@ -52,21 +58,150 @@ jobs:
         run: |
           eas build --local --platform ios --profile production --non-interactive --output "$RUNNER_TEMP/techrabbit.ipa"
 
+      - name: Läs version och byggnummer ur ipa-filen
+        # Byggnumret måste vara HÖGRE än allt som redan laddats upp, annars
+        # avvisar Apple filen. Bygge 4 gick upp 2026-11-23, så 5 är lägsta.
+        run: |
+          test -f "$RUNNER_TEMP/techrabbit.ipa" || { echo "Ingen ipa-fil byggdes."; exit 1; }
+          rm -rf "$RUNNER_TEMP/ipa"
+          mkdir -p "$RUNNER_TEMP/ipa"
+          unzip -q -o "$RUNNER_TEMP/techrabbit.ipa" 'Payload/*.app/Info.plist' -d "$RUNNER_TEMP/ipa"
+          plist=$(ls "$RUNNER_TEMP"/ipa/Payload/*.app/Info.plist | head -1)
+          nr=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$plist")
+          ver=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$plist")
+          echo "Version $ver, byggnummer $nr"
+          case "$nr" in
+            ''|*[!0-9]*) echo "Byggnumret är inte ett tal."; exit 1 ;;
+          esac
+          if [ "$nr" -lt 5 ]; then
+            echo "Byggnummer $nr är inte högre än tidigare försök (4 finns redan hos Apple)."
+            exit 1
+          fi
+          echo "BYGGNUMMER=$nr" >> "$GITHUB_ENV"
+          echo "APPVERSION=$ver" >> "$GITHUB_ENV"
+
       - name: Lägg App Store Connect-nyckeln på plats
         env:
           ASC_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
         run: |
           mkdir -p ~/private_keys
-          printf '%s' "$ASC_P8" > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 700 ~/private_keys
+          KEYFIL="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # Nyckeln byggs om från sin base64-kropp. Då blir radbrytningarna
+          # rätt vare sig hemligheten klistrades in med riktiga radbrytningar
+          # eller som en enda rad med tecknen bakstreck-n.
+          KEYFIL="$KEYFIL" node -e 'const fs=require("fs");const rad=(process.env.ASC_P8||"").replace(/\\r/g,"").replace(/\\n/g,"\n").replace(/\r/g,"");const kropp=rad.replace(/-----[^-]+-----/g,"").replace(/[^A-Za-z0-9+/=]/g,"");if(kropp.length<100){console.error("ASC_KEY_P8 ser inte ut som en nyckel: "+kropp.length+" tecken base64.");process.exit(1);}const brutet=kropp.match(/.{1,64}/g).join("\n");const hdr="-----BEGIN PRIVATE K"+"EY-----";const ftr="-----END PRIVATE K"+"EY-----";fs.writeFileSync(process.env.KEYFIL,hdr+"\n"+brutet+"\n"+ftr+"\n",{mode:0o600});console.log("Nyckeln skriven: "+kropp.length+" tecken base64, "+brutet.split("\n").length+" rader.");'
+          echo "KEYFIL=$KEYFIL" >> "$GITHUB_ENV"
 
       - name: Ladda upp till App Store Connect
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
+          set +e
+          set -o pipefail
           xcrun altool --upload-app -f "$RUNNER_TEMP/techrabbit.ipa" -t ios \
-            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/altool.log"
+          utkod=$?
+          set -e
+          echo "altool slutade med utkod $utkod"
+          if [ "$utkod" -ne 0 ]; then
+            echo "Uppladdningen misslyckades."
+            exit "$utkod"
+          fi
+          grep -q "UPLOAD SUCCEEDED" "$RUNNER_TEMP/altool.log" || {
+            echo "altool gav utkod 0 men ingen rad UPLOAD SUCCEEDED. Ingen bekräftelse."
+            exit 1
+          }
+
+      - name: Vänta på att bygget blir ett bygge hos Apple
+        # Detta är kontrollen som saknades. Den frågar App Store Connect
+        # efter byggnumret och faller om det aldrig dyker upp, om appposten
+        # inte finns, eller om Apple avvisar binären under behandlingen.
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/kolla.mjs" <<'SLUT'
+          import { readFileSync } from 'node:fs';
+          import { sign } from 'node:crypto';
+
+          const BUNDLE = 'se.aimstudios.techrabbit.kalkylator';
+          const kid = process.env.ASC_KEY_ID;
+          const iss = process.env.ASC_ISSUER_ID;
+          const nyckel = readFileSync(process.env.KEYFIL, 'utf8');
+          const byggnummer = String(process.env.BYGGNUMMER);
+
+          /** En ES256-signerad JWT, som App Store Connect kräver. */
+          function biljett() {
+            const nu = Math.floor(Date.now() / 1000);
+            const del = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+            const data =
+              del({ alg: 'ES256', kid, typ: 'JWT' }) +
+              '.' +
+              del({ iss, iat: nu, exp: nu + 600, aud: 'appstoreconnect-v1' });
+            const namn = sign('sha256', Buffer.from(data), {
+              key: nyckel,
+              dsaEncoding: 'ieee-p1363',
+            });
+            return data + '.' + namn.toString('base64url');
+          }
+
+          async function hamta(vag) {
+            const svar = await fetch('https://api.appstoreconnect.apple.com' + vag, {
+              headers: { Authorization: 'Bearer ' + biljett() },
+            });
+            const text = await svar.text();
+            if (!svar.ok) {
+              throw new Error('App Store Connect svarade ' + svar.status + ' pa ' + vag + ': ' + text.slice(0, 400));
+            }
+            return JSON.parse(text);
+          }
+
+          const appar = await hamta('/v1/apps?filter[bundleId]=' + BUNDLE);
+          if (!Array.isArray(appar.data) || appar.data.length === 0) {
+            console.error('Ingen app med bundle-id ' + BUNDLE + ' finns i App Store Connect for det har teamet.');
+            console.error('Apple tar emot filen anda, men den blir aldrig ett bygge. Skapa appposten under Apps.');
+            process.exit(1);
+          }
+          const appId = appar.data[0].id;
+          console.log('App: ' + (appar.data[0].attributes?.name ?? '?') + ' (' + appId + ')');
+
+          const SLUTAR = Date.now() + 25 * 60 * 1000;
+          for (let varv = 1; Date.now() < SLUTAR; varv += 1) {
+            const byggen = await hamta(
+              '/v1/builds?filter[app]=' + appId + '&filter[version]=' + byggnummer + '&limit=5',
+            );
+            const bygge = (byggen.data ?? [])[0];
+            if (bygge) {
+              const lage = bygge.attributes?.processingState ?? 'OKANT';
+              console.log('Bygge ' + byggnummer + ': ' + lage);
+              if (lage === 'VALID') {
+                console.log('Apple har bekraftat bygget. Det syns under TestFlight.');
+                process.exit(0);
+              }
+              if (lage === 'FAILED' || lage === 'INVALID') {
+                console.error('Apple avvisade binaren (' + lage + ').');
+                process.exit(1);
+              }
+            } else {
+              console.log('Varv ' + varv + ': bygge ' + byggnummer + ' syns inte an.');
+            }
+            await new Promise((r) => setTimeout(r, 60000));
+          }
+          console.error('Bygge ' + byggnummer + ' dok aldrig upp hos Apple inom 25 minuter.');
+          console.error('Filen togs emot men blev inget bygge. Kontrollera appposten och avtalen i App Store Connect.');
+          process.exit(1);
+          SLUT
+          node "$RUNNER_TEMP/kolla.mjs"
+
+      - name: Radera nyckeln
+        if: always()
+        run: |
+          rm -rf ~/private_keys
+          rm -f "$RUNNER_TEMP/kolla.mjs"
+          echo "Nyckelfilen är borta."
 
       - name: Spara bygget som artefakt
         if: always()
