@@ -14,7 +14,6 @@ import { useEffect, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,7 +24,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
-import { KLAR_ID_ARK, Klarrad } from './Tangentbord';
+import { KLAR_ID_ARK, Klarrad, TANGENTBORDSBETEENDE } from './Tangentbord';
 import { useTema } from '../design/tema';
 import { SKARMMARGINAL, TEXT } from '../design/tokens';
 import { REDUCERAD_MS, SKARM_MS, useRorelse } from '../lib/rorelse';
@@ -108,7 +107,7 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={TANGENTBORDSBETEENDE}
             style={styles.fyll}
           >
             <ScrollView

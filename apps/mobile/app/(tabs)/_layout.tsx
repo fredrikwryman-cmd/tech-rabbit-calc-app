@@ -6,8 +6,9 @@
  */
 
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { useTema } from '../../design/tema';
 import { iVikt, TEXT, type Palett } from '../../design/tokens';
@@ -56,6 +57,16 @@ const FLIKAR = [
 
 export default function TabbLayout(): ReactNode {
   const { farg } = useTema();
+  /**
+   * Direktiv 33: flikraden lamnade 12 pt pa Android, oavsett telefon.
+   *
+   * Med edge-to-edge ritar appen under navigeringsfaltet, och det ar 0 pt
+   * med knappar, ~24 med gestbage och mer pa vissa telefoner. Insetet ar det
+   * enda som vet. Pa iOS ger det 34 pa en telefon med hemstreck och 0 pa en
+   * med hemknapp — samma siffror som den fasta ternaren gav, men uppmatta.
+   */
+  const insets = useSafeAreaInsets();
+  const under = Math.max(insets.bottom, 12);
   const vald = farg['greenIcon']!;
   const ovald = farg['muted']!;
 
@@ -64,8 +75,9 @@ export default function TabbLayout(): ReactNode {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          height: TABBHOJD + (Platform.OS === 'ios' ? 34 : 12),
+          height: TABBHOJD + under,
           paddingTop: 6,
+          paddingBottom: under - 12 > 0 ? under - 12 : 0,
           backgroundColor: farg['chrome'],
           borderTopColor: farg['border'],
         },

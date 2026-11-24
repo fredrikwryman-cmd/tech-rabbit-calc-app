@@ -24,6 +24,20 @@ import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, Text } f
 import { useTema } from '../design/tema';
 import { TEXT } from '../design/tokens';
 
+/**
+ * KeyboardAvoidingView-beteendet, per plattform (direktiv 33).
+ *
+ * iOS lägger till utrymme under innehållet (`padding`). Android får `height`:
+ * aktivitetens fönster krymper (`softwareKeyboardLayoutMode: "resize"` i
+ * app.json), och vyn följer med i höjd, så fältet och knappen under det
+ * stannar ovanför tangentbordet. `undefined` — det som stod här förut —
+ * betydde att Android inte flyttade någonting alls.
+ *
+ * Konstanten står på ett ställe: fyra vyer läste förut samma ternär, och
+ * fyra kopior hade kunnat glida isär.
+ */
+export const TANGENTBORDSBETEENDE = Platform.OS === 'ios' ? 'padding' : 'height';
+
 /** Skärmarna: frågefältet och svarsfältet. */
 export const KLAR_ID = 'tr-klar-skarm';
 /** Arken: Räkna vidare och ändringsfälten i resultatet. */

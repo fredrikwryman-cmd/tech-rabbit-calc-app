@@ -24,7 +24,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -49,6 +48,7 @@ import { ResultatSheet } from '../../komponenter/ResultatSheet';
 import { Lyssnarkort, Mikrofonknapp, Rostbesked } from '../../komponenter/Rost';
 import { medFelgrans } from '../../komponenter/Felgrans';
 import { Skarm } from '../../komponenter/Skarm';
+import { TANGENTBORDSBETEENDE } from '../../komponenter/Tangentbord';
 import { steg3Ms, stegbyteMs, tolkare } from '../../lib/aktiv-tolkare';
 import { useApp } from '../../lib/app-state';
 import { lasUtkast, skrivUtkast } from '../../lib/lagring';
@@ -551,7 +551,7 @@ function RaknaSkarm(): ReactNode {
     return (
       <Skarm rubrik="En sak till">
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={TANGENTBORDSBETEENDE}
           style={styles.spalt}
         >
           <Animated.View
@@ -676,7 +676,7 @@ function RaknaSkarm(): ReactNode {
     <>
       <Skarm rubrik="Vad vill du räkna?" stor>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={TANGENTBORDSBETEENDE}
           style={styles.spalt}
         >
           <ScrollView

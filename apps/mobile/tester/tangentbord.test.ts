@@ -114,6 +114,61 @@ test('ett tryck utanfor faltet stanger tangentbordet', () => {
   assert.match(skarm, /<Klarrad \/>/u, 'Skarm ska rita skarmens Klar-rad');
 });
 
+test('Klar-raden ritas bara pa iOS', () => {
+  const kod = readFileSync(join(ROT, 'komponenter', 'Tangentbord.tsx'), 'utf8');
+  assert.match(
+    kod,
+    /if \(Platform\.OS !== 'ios'\) return null;/u,
+    'Android har en egen bakatvag ur tangentbordet och ska inte ha raden',
+  );
+});
+
+test('Android flyttar innehallet, iOS lagger till utrymme', () => {
+  const kod = readFileSync(join(ROT, 'komponenter', 'Tangentbord.tsx'), 'utf8');
+  // 'height' pa Android: fonstret krymper, och vyn foljer med. Stod det
+  // undefined — som det gjorde fore direktiv 33 — flyttades ingenting alls.
+  assert.match(
+    kod,
+    /TANGENTBORDSBETEENDE = Platform\.OS === 'ios' \? 'padding' : 'height'/u,
+    'beteendet ska vara satt for bada plattformarna',
+  );
+
+  // Och ingen vy far ha en egen kopia av ternaren kvar.
+  for (const [namn, fil] of filerna()) {
+    if (!fil.includes('KeyboardAvoidingView')) continue;
+    for (const rad of fil.split('\n')) {
+      if (!rad.includes('behavior=')) continue;
+      assert.match(
+        rad,
+        /behavior=\{TANGENTBORDSBETEENDE\}/u,
+        `${namn}: beteendet ska lasas ur Tangentbord.tsx`,
+      );
+    }
+  }
+});
+
+test('fonstret krymper nar tangentbordet kommer upp pa Android', () => {
+  const konfig = JSON.parse(readFileSync(join(ROT, 'app.json'), 'utf8')) as {
+    expo: { android?: { softwareKeyboardLayoutMode?: string } };
+  };
+  // 'resize' ar det som gor att 'height' ovanfor har nagot att folja.
+  assert.equal(konfig.expo.android?.softwareKeyboardLayoutMode, 'resize');
+});
+
+test('tryck utanfor faltet stanger tangentbordet pa bada plattformarna', () => {
+  for (const delar of [
+    ['komponenter', 'Skarm.tsx'],
+    ['komponenter', 'RabbitAI.tsx'],
+  ] as const) {
+    const kod = readFileSync(join(ROT, ...delar), 'utf8');
+    assert.match(kod, /Keyboard\.dismiss\(\)/u, `${delar.join('/')}: inget tryck stanger`);
+    assert.ok(
+      !kod.includes('Platform.OS'),
+      `${delar.join('/')}: vagen ut far inte bero pa plattform`,
+    );
+  }
+});
+
 test('listor med falt stanger tangentbordet nar man drar', () => {
   const krav = [
     ['komponenter', 'Sheet.tsx'],

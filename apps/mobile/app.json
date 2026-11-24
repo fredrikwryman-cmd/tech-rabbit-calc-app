@@ -22,10 +22,13 @@
     },
     "android": {
       "package": "se.aimstudios.techrabbit.kalkylator",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/ikon/ikon-ljus.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/ikon/ikon-android-forgrund.png",
+        "monochromeImage": "./assets/ikon/ikon-android-monokrom.png",
+        "backgroundColor": "#010101"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]

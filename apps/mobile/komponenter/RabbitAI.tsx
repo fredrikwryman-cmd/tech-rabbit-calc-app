@@ -20,7 +20,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -45,7 +44,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTema } from '../design/tema';
-import { KLAR_ID_CHAT, KLAR_ID_PANEL, Klarrad } from './Tangentbord';
+import { KLAR_ID_CHAT, KLAR_ID_PANEL, Klarrad, TANGENTBORDSBETEENDE } from './Tangentbord';
 import { TEXT } from '../design/tokens';
 import { samtalsrubrik, tidKvar, type Kalla, type Meddelande, type Samtal } from '../lib/chatt';
 import { visaDatum } from '../lib/lagring';
@@ -132,7 +131,7 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={TANGENTBORDSBETEENDE}
       style={styles.fyll}
     >
       {/* Huvudet, 52 högt: meny, namn och penna för nytt samtal. */}
@@ -195,11 +194,22 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
         </Pressable>
       </View>
 
+      {/*
+        Ett tryck i traden stanger tangentbordet (direktiv 32 och 33).
+        Skarm.tsx gor det pa de andra flikarna, men chatten ritar sin egen
+        ram och maste gora det sjalv. Bubblorna tar sina egna tryck.
+      */}
       {tomt ? (
-        <Valkomst onForslag={(f) => onSkicka(f)} />
+        <Pressable accessible={false} onPress={() => Keyboard.dismiss()} style={styles.fyll}>
+          <Valkomst onForslag={(f) => onSkicka(f)} />
+        </Pressable>
       ) : (
         <ScrollView
           ref={traden}
+          onStartShouldSetResponderCapture={() => {
+            Keyboard.dismiss();
+            return false;
+          }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={styles.trad}
