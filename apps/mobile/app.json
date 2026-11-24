@@ -15,6 +15,8 @@
         "tinted": "./assets/ikon/ikon-tonad.png"
       },
       "infoPlist": {
+        "NSPhotoLibraryAddUsageDescription": "Tech Rabbit Calc sparar din uträkning som bild i Bilder när du väljer Spara bild i delningsmenyn.",
+        "NSPhotoLibraryUsageDescription": "Tech Rabbit Calc läser inga av dina bilder. Texten krävs av iOS eftersom delningen av uträkningen kan gå till Bilder.",
         "NSMicrophoneUsageDescription": "Tech Rabbit Calc använder mikrofonen när du trycker på mikrofonknappen, så att du kan prata in din fråga i stället för att skriva den.",
         "NSSpeechRecognitionUsageDescription": "Talet görs om till text så att frågan hamnar i fältet. Inget ljud sparas och inget ljud lämnar telefonen.",
         "ITSAppUsesNonExemptEncryption": false
@@ -31,6 +33,14 @@
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.ACCESS_WIFI_STATE"
       ]
     },
     "plugins": [
