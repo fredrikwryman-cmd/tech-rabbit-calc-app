@@ -23,13 +23,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   type TextInputInstance,
 } from 'react-native';
+import { KeyboardAvoidingView, KeyboardGestureArea } from 'react-native-keyboard-controller';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Network from 'expo-network';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -41,18 +40,21 @@ import { Fragefalt, Svarsfalt } from '../../komponenter/Falt';
 import { DelaSheet } from '../../komponenter/Delning';
 import { DinFragaKort, Exempelkort, Premiumkort, type Exempel } from '../../komponenter/Kort';
 import { PrimarKnapp, SekundarKnapp } from '../../komponenter/Knapp';
-import { Progressteg, type Stegtillstand } from '../../komponenter/Progress';
+import { Resultatskelett } from '../../komponenter/Skelett';
+import { Historikrad } from '../../komponenter/Historikrad';
+import { Textknapp } from '../../komponenter/Knapp';
 import { SkrivSjalv, Valknapp } from '../../komponenter/Resultatdelar';
 import { RaknaVidareSheet } from '../../komponenter/RaknaVidare';
 import { ResultatSheet } from '../../komponenter/ResultatSheet';
 import { Lyssnarkort, Mikrofonknapp, Rostbesked } from '../../komponenter/Rost';
 import { medFelgrans } from '../../komponenter/Felgrans';
-import { Skarm } from '../../komponenter/Skarm';
+import { Skarm, useSkarmscroll } from '../../komponenter/Skarm';
 import { TANGENTBORDSBETEENDE } from '../../komponenter/Tangentbord';
 import { steg3Ms, stegbyteMs, tolkare } from '../../lib/aktiv-tolkare';
 import { useApp } from '../../lib/app-state';
-import { lasUtkast, skrivUtkast } from '../../lib/lagring';
+import { lasUtkast, postSomResultat, skrivUtkast, visaDatum, type Historikpost } from '../../lib/lagring';
 import { REDUCERAD_MS, useHaptik, useRorelse, YTA_MS } from '../../lib/rorelse';
+import { senasteUtrakningar, visaAlla, visaStrom } from '../../lib/handelsestrom';
 import { useRost } from '../../lib/rost';
 import { delningsbildensHuvudsvar, delningsbildensRader } from '../../lib/resultatvy';
 import { andringsmarke, byggVidareFraga } from '../../lib/vidare';
@@ -75,9 +77,14 @@ const EXEMPEL: readonly Exempel[] = [
   },
 ];
 
-/** Stegen i vy 03. Verkliga skeden, ingen procentsiffra. */
-const STEG = ['Tolkar din fråga', 'Räknar', 'Förbereder förklaring'] as const;
-
+/**
+ * Stegnumret lever kvar i lagets tillstand, men ritas inte langre.
+ *
+ * Direktiv 39 steg 4: stegindikatorn ar ersatt av ett skelett i
+ * resultatkortets form (rev-ux 2.2, "skeleton i ratt form, aldrig en ensam
+ * spinner"). Numret behalls for att lopnumret och timeouterna ar samma
+ * skydd mot sena svar som forut — se filhuvudet.
+ */
 type Stegnr = 1 | 2 | 3;
 
 /**
@@ -102,8 +109,10 @@ function RaknaSkarm(): ReactNode {
   const { farg } = useTema();
   const rorelse = useRorelse();
   const haptik = useHaptik();
-  const { laggTill } = useApp();
+  const { laggTill, historik, taBort } = useApp();
   const router = useRouter();
+  /** rev-ux 4.3: rubriken kollapsar och toppfaltet far avdelare vid scroll. */
+  const skarmscroll = useSkarmscroll();
   /** 21d: frågan Rabbit AI lämnade över. `n` gör att samma fråga kan komma igen. */
   const parametrar = useLocalSearchParams<{
     raknaPa?: string;
@@ -135,6 +144,12 @@ function RaknaSkarm(): ReactNode {
   const [tidigare, setTidigare] = useState<readonly Vidaresteg[]>([]);
   const [vidareOppen, setVidareOppen] = useState(false);
   const [delaOppen, setDelaOppen] = useState(false);
+  /**
+   * Direktiv 39 steg 6: en rad i handelsestrommen oppnar sitt resultat som
+   * ark, pa Hem. Posten ligger for sig: den har ingen levande rakning bakom
+   * sig och far inte blandas ihop med `svar`.
+   */
+  const [stromOppen, setStromOppen] = useState<Historikpost | null>(null);
   const fragefaltet = useRef<TextInputInstance>(null);
 
   /** Löpnumret. Se filhuvudet: det är skyddet mot sena svar. */
@@ -211,7 +226,9 @@ function RaknaSkarm(): ReactNode {
 
   function tillampa(resultat: Tolkningssvar, stalldFraga: string): void {
     if (resultat.sort === 'fel') {
-      haptik('varning');
+      // rev-ux haptikkartan: fel ger error, inte warning. Warning hor till
+      // det som ska bekraftas INNAN det gors (t.ex. Rensa historik).
+      haptik('fel');
       setLage({ sort: 'fel', fel: resultat });
       return;
     }
@@ -445,8 +462,6 @@ function RaknaSkarm(): ReactNode {
   // Vy 03: Räknar
   // -------------------------------------------------------------------------
   if (lage.sort === 'raknar') {
-    const tillstand = (nr: Stegnr): Stegtillstand =>
-      lage.steg > nr ? 'klar' : lage.steg === nr ? 'pagar' : 'vantar';
     return (
       <Skarm rubrik="Räknar …">
         <Animated.View
@@ -454,18 +469,13 @@ function RaknaSkarm(): ReactNode {
           style={styles.spalt}
         >
           <DinFragaKort fraga={fraga} fallbart={false} />
-          <View style={[styles.kort, { backgroundColor: farg['card'] }]}>
-            {STEG.map((titel, i) => (
-              <Progressteg
-                key={titel}
-                nr={(i + 1) as Stegnr}
-                titel={titel}
-                tillstand={tillstand((i + 1) as Stegnr)}
-                forst={i === 0}
-                tid={i === 0 ? stegbyteMs : steg3Ms - stegbyteMs}
-              />
-            ))}
-          </View>
+          {/*
+            Direktiv 39 steg 4: skelettet star dar svaret kommer att sta, i
+            resultatkortets form — etikett, stort tal, rader. Kortet byter
+            darfor inte hojd nar svaret landar, och ingen behover lasa tre
+            steg som anda inte sager nar det ar klart.
+          */}
+          <Resultatskelett />
           <Text maxFontSizeMultiplier={1.6} style={[TEXT['body'], styles.mitten, { color: farg['muted'] }]}>
             Det brukar ta några sekunder.
           </Text>
@@ -567,6 +577,8 @@ function RaknaSkarm(): ReactNode {
       <Skarm rubrik="En sak till">
         <KeyboardAvoidingView
           behavior={TANGENTBORDSBETEENDE}
+          /* Vyn mäter sitt eget läge: tabbaren räknas in (direktiv 41). */
+          automaticOffset
           style={styles.spalt}
         >
           <Animated.View
@@ -689,66 +701,117 @@ function RaknaSkarm(): ReactNode {
   // -------------------------------------------------------------------------
   return (
     <>
-      <Skarm rubrik="Vad vill du räkna?" stor>
+      <Skarm rubrik="Vad vill du räkna?" stor scroll={skarmscroll.scroll}>
         <KeyboardAvoidingView
           behavior={TANGENTBORDSBETEENDE}
+          /* Vyn mäter sitt eget läge: tabbaren räknas in (direktiv 41). */
+          automaticOffset
           style={styles.spalt}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={styles.spalt}
-          >
-            <Fragefalt
-              ref={fragefaltet}
-              varde={fraga}
-              onChange={setFraga}
-              fokus={fokus}
-              onFokus={setFokus}
-              lyssnar={rost.lage === 'lyssnar'}
-              mikrofon={
-                <Mikrofonknapp
-                  lage={rost.lage}
-                  onStarta={rost.starta}
-                  onStoppa={rost.stoppa}
-                />
-              }
-            />
-
-            {/* Vy 40: lyssnarkortet. Vy 41 och beskedet om testappen. */}
-            {rost.lage === 'lyssnar' ? (
-              <Lyssnarkort niva={rost.niva} onKlar={rost.stoppa} />
-            ) : null}
-            <Rostbesked
-              lage={rost.lage}
-              onStang={rost.nollstall}
-              onOppnaInstallningar={rost.oppnaInstallningar}
-            />
-
-            <PrimarKnapp titel="Räkna" inaktiv={!kanRakna} onPress={() => void rakna([])} />
-
-            <Text
-              maxFontSizeMultiplier={1.6}
-              style={[TEXT['sectionLabel'], styles.versal, { color: farg['muted'] }]}
+          {/* Direktiv 41: gesten för Android (se tråden i RabbitAI). */}
+          <KeyboardGestureArea interpolator="ios" style={styles.spalt}>
+            <Animated.ScrollView
+              keyboardShouldPersistTaps="handled"
+              /*
+                Drag drar ned tangentbordet, och det följer fingret (rev-ux 8.6).
+                KeyboardGestureArea utanför listan ger Android samma gest, så
+                "interactive" betyder samma sak på båda plattformarna.
+              */
+              keyboardDismissMode="interactive"
+              contentContainerStyle={styles.spalt}
+              onScroll={skarmscroll.handler}
+              scrollEventThrottle={16}
+              /* Gummiband overst (rev-ux 4.3). Pa Android ger overScroll det. */
+              alwaysBounceVertical
             >
-              Exempel
-            </Text>
-            <View style={styles.exempelrad}>
-              {EXEMPEL.map((e) => (
-                <Exempelkort
-                  key={e.titel}
-                  exempel={e}
-                  onPress={(ny) => {
-                    // Texten tonas in i fältet: samma 200 ms som ytor i övrigt.
-                    setFraga(ny);
-                  }}
-                />
-              ))}
-            </View>
+              <Fragefalt
+                ref={fragefaltet}
+                varde={fraga}
+                onChange={setFraga}
+                fokus={fokus}
+                onFokus={setFokus}
+                lyssnar={rost.lage === 'lyssnar'}
+                mikrofon={
+                  <Mikrofonknapp
+                    lage={rost.lage}
+                    onStarta={rost.starta}
+                    onStoppa={rost.stoppa}
+                  />
+                }
+              />
 
-            {/* Vy 20: premiumkortet. Hela kortet öppnar fliken Rabbit AI. */}
-            <Premiumkort onPress={() => router.navigate('/rabbit-ai')} />
-          </ScrollView>
+              {/* Vy 40: lyssnarkortet. Vy 41 och beskedet om testappen. */}
+              {rost.lage === 'lyssnar' ? (
+                <Lyssnarkort niva={rost.niva} onKlar={rost.stoppa} />
+              ) : null}
+              <Rostbesked
+                lage={rost.lage}
+                onStang={rost.nollstall}
+                onOppnaInstallningar={rost.oppnaInstallningar}
+              />
+
+              <PrimarKnapp titel="Räkna" inaktiv={!kanRakna} onPress={() => void rakna([])} />
+
+              <Text
+                maxFontSizeMultiplier={1.6}
+                style={[TEXT['sectionLabel'], styles.versal, { color: farg['muted'] }]}
+              >
+                Exempel
+              </Text>
+              <View style={styles.exempelrad}>
+                {EXEMPEL.map((e) => (
+                  <Exempelkort
+                    key={e.titel}
+                    exempel={e}
+                    onPress={(ny) => {
+                      // Texten tonas in i fältet: samma 200 ms som ytor i övrigt.
+                      setFraga(ny);
+                    }}
+                  />
+                ))}
+              </View>
+
+              {/*
+                Direktiv 39 steg 6: handelsestrommen (rev-ux 2.1 punkt 3).
+
+                De tre senaste utrakningarna ur historiken, med "Visa alla"
+                sist. Tom historik ger inget block alls — en rubrik over
+                ingenting ar bara en rad for mycket.
+              */}
+              {visaStrom(historik) ? (
+                <>
+                  <Text
+                    maxFontSizeMultiplier={1.6}
+                    style={[TEXT['sectionLabel'], styles.versal, { color: farg['muted'] }]}
+                  >
+                    Senast räknat
+                  </Text>
+                  <View style={[styles.kort, { backgroundColor: farg['card'] }]}>
+                    {senasteUtrakningar(historik).map((post, i) => (
+                      <Historikrad
+                        key={post.id}
+                        fraga={post.fraga}
+                        resultat={post.resultat}
+                        datum={visaDatum(post.datum)}
+                        forst={i === 0}
+                        onPress={() => setStromOppen(post)}
+                        onTaBort={() => taBort(post.id)}
+                      />
+                    ))}
+                  </View>
+                  {visaAlla(historik) ? (
+                    <Textknapp
+                      titel="Visa alla"
+                      onPress={() => router.navigate('/historik')}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {/* Vy 20: premiumkortet. Hela kortet öppnar fliken Rabbit AI. */}
+              <Premiumkort onPress={() => router.navigate('/rabbit-ai')} />
+            </Animated.ScrollView>
+          </KeyboardGestureArea>
         </KeyboardAvoidingView>
       </Skarm>
 
@@ -796,6 +859,33 @@ function RaknaSkarm(): ReactNode {
             if (extra.length === 0) return;
             setSvar(null);
             void rakna([...kedja, ...extra]);
+          }}
+        />
+      ) : null}
+
+      {/*
+        Direktiv 39 steg 6: raden i handelsestrommen oppnar sitt resultat som
+        ark. Posten bar svaret, inte indata, sa Rakna om och Rakna vidare gar
+        samma vag som i Historik: frangan lamnas over och raknas om.
+      */}
+      {stromOppen !== null && svar === null ? (
+        <ResultatSheet
+          oppen={!delaOppen}
+          fraga={stromOppen.fraga}
+          etikett={stromOppen.etikett}
+          resultat={postSomResultat(stromOppen)}
+          forklaring={stromOppen.forklaring}
+          onStang={() => setStromOppen(null)}
+          onNyFraga={() => {
+            setStromOppen(null);
+            nyFraga();
+          }}
+          onRaknaOm={() => undefined}
+          onDela={() => setDelaOppen(true)}
+          onRaknaVidare={() => {
+            const fragan = stromOppen.fraga;
+            setStromOppen(null);
+            void raknaFraga(fragan);
           }}
         />
       ) : null}

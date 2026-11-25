@@ -15,12 +15,15 @@ import { setStatusBarStyle, StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, type ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { Integritetslager } from '../komponenter/Integritetslager';
 import { Startskarm } from '../komponenter/Startskarm';
 import { mala } from '../lib/rotbakgrund';
 import { TemaProvider, useTema } from '../design/tema';
 import { AppProvider } from '../lib/app-state';
+import { ArkProvider } from '../lib/ark';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -79,16 +82,29 @@ export default function RotLayout(): ReactNode {
   return (
     // GestureHandlerRootView behövs för svepet i historiken.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AppProvider>
-          <TemaProvider>
-            {/* Vy 22: startskärmen ligger överst tills appen är igång. */}
-            <Startskarm>
-              <Navigation />
-            </Startskarm>
-          </TemaProvider>
-        </AppProvider>
-      </SafeAreaProvider>
+      {/*
+        Direktiv 41: KeyboardProvider är det som gör att tangentbordets
+        exakta kurva går att följa, och den måste ligga över allt som har
+        ett fält. Utan den gör bibliotekets KeyboardAvoidingView ingenting.
+      */}
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <AppProvider>
+            {/* Arklagret: sidan bakom ett oppet ark sjunker (rev-ux A3). */}
+            <ArkProvider>
+              <TemaProvider>
+                {/* rev-ux 2.4: inget innehåll syns i app-växlaren. */}
+                <Integritetslager>
+                  {/* Vy 22: startskärmen ligger överst tills appen är igång. */}
+                  <Startskarm>
+                    <Navigation />
+                  </Startskarm>
+                </Integritetslager>
+              </TemaProvider>
+            </ArkProvider>
+          </AppProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

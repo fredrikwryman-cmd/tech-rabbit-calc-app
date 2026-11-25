@@ -8,9 +8,9 @@
  * riktigt. Tryck på en rad öppnar uträkningen i resultat-sheeten igen.
  */
 
-import { useState, type ReactNode } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 
 import { useTema } from '../../design/tema';
@@ -20,8 +20,9 @@ import { medFelgrans } from '../../komponenter/Felgrans';
 import { Historikrad } from '../../komponenter/Historikrad';
 import { PrimarKnapp } from '../../komponenter/Knapp';
 import { ResultatSheet } from '../../komponenter/ResultatSheet';
-import { Skarm } from '../../komponenter/Skarm';
+import { Skarm, useSkarmscroll } from '../../komponenter/Skarm';
 import { useApp } from '../../lib/app-state';
+import { grupperaPaDag, rubrikplatser } from '../../lib/historikgrupper';
 import { postSomResultat, visaDatum, type Historikpost } from '../../lib/lagring';
 import { delningsbildensHuvudsvar, delningsbildensRader } from '../../lib/resultatvy';
 import { REDUCERAD_MS, useRorelse, YTA_MS } from '../../lib/rorelse';
@@ -31,8 +32,12 @@ function HistorikSkarm(): ReactNode {
   const rorelse = useRorelse();
   const router = useRouter();
   const { historik, taBort, laddat } = useApp();
+  /** rev-ux 4.3: rubriken kollapsar och toppfaltet far avdelare vid scroll. */
+  const skarmscroll = useSkarmscroll();
   const [oppen, setOppen] = useState<Historikpost | null>(null);
   const [delaOppen, setDelaOppen] = useState(false);
+  /** Posterna i dagsgrupper, för de klistriga rubrikerna. */
+  const grupper = useMemo(() => grupperaPaDag(historik), [historik]);
 
   const toning = FadeIn.duration(rorelse.reducerad ? REDUCERAD_MS : YTA_MS);
 
@@ -62,26 +67,59 @@ function HistorikSkarm(): ReactNode {
   // Vy 07: historik med rader.
   return (
     <>
-      <Skarm rubrik="Historik">
+      <Skarm rubrik="Historik" scroll={skarmscroll.scroll}>
         <Animated.View entering={toning} style={styles.fyll}>
-          <ScrollView contentContainerStyle={styles.lista}>
-            <View style={[styles.kort, { backgroundColor: farg['card'] }]}>
-              {historik.map((post, i) => (
-                <Historikrad
-                  key={post.id}
-                  fraga={post.fraga}
-                  resultat={post.resultat}
-                  datum={visaDatum(post.datum)}
-                  forst={i === 0}
-                  onPress={() => setOppen(post)}
-                  onTaBort={() => taBort(post.id)}
-                />
-              ))}
-            </View>
+          <Animated.ScrollView
+            contentContainerStyle={styles.lista}
+            onScroll={skarmscroll.handler}
+            scrollEventThrottle={16}
+            stickyHeaderIndices={rubrikplatser(grupper.length)}
+            /* Gummiband overst (rev-ux 4.3). */
+            alwaysBounceVertical
+          >
+            {/*
+              Klistriga datumrubriker (rev-ux 4.3 punkt 5, direktiv 41).
+              Listan ritas som rubrik, kort, rubrik, kort … och
+              `rubrikplatser` säger vilka barn som är rubriker. Grupperingen
+              ligger i lib/historikgrupper.ts och delar rubriknamnen med
+              chatten.
+            */}
+            {grupper.map((grupp) => (
+              <Fragment key={grupp.nyckel}>
+                <View style={[styles.datumrad, { backgroundColor: farg['bg'] }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.4}
+                    style={[styles.datumtext, { color: farg['muted'] }]}
+                  >
+                    {grupp.rubrik}
+                  </Text>
+                </View>
+                <Animated.View
+                  layout={
+                    rorelse.reducerad
+                      ? undefined
+                      : LinearTransition.springify().damping(28).stiffness(220)
+                  }
+                  style={[styles.kort, { backgroundColor: farg['card'] }]}
+                >
+                  {grupp.poster.map((post, i) => (
+                    <Historikrad
+                      key={post.id}
+                      fraga={post.fraga}
+                      resultat={post.resultat}
+                      datum={visaDatum(post.datum)}
+                      forst={i === 0}
+                      onPress={() => setOppen(post)}
+                      onTaBort={() => taBort(post.id)}
+                    />
+                  ))}
+                </Animated.View>
+              </Fragment>
+            ))}
             <Text maxFontSizeMultiplier={1.6} style={[TEXT['secondary'], { color: farg['muted'] }]}>
               Svep åt vänster eller tryck på … för att ta bort.
             </Text>
-          </ScrollView>
+          </Animated.ScrollView>
         </Animated.View>
       </Skarm>
 
@@ -132,7 +170,15 @@ function HistorikSkarm(): ReactNode {
 
 const styles = StyleSheet.create({
   fyll: { flex: 1 },
-  lista: { gap: 10, paddingBottom: 20 },
+  lista: { paddingBottom: 20 },
+  /* Rubriken klistrar sig: den måste ha en egen bakgrund att ligga mot. */
+  datumrad: { paddingTop: 10, paddingBottom: 6 },
+  datumtext: {
+    fontSize: 12,
+    fontFamily: 'Archivo_700Bold',
+    letterSpacing: 0.4,
+    includeFontPadding: false,
+  },
   kort: { borderRadius: 20, overflow: 'hidden' },
   tom: { flex: 1, justifyContent: 'space-between' },
   tomtext: { flex: 1, justifyContent: 'center', gap: 8 },

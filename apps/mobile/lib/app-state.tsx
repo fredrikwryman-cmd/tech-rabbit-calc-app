@@ -25,6 +25,7 @@ import {
   type Installningar,
   type Utseende,
 } from './lagring';
+import { sattHaptik } from './rorelse';
 
 export interface AppTillstand {
   /** Falskt tills lagringen är läst. Vyerna visar inget halvfärdigt så länge. */
@@ -58,6 +59,17 @@ export function AppProvider({ children }: { readonly children: ReactNode }): Rea
       kvar = false;
     };
   }, []);
+
+  /**
+   * Haptikens av-knapp (rev-ux 8.1).
+   *
+   * Den centrala haptic() i lib/rorelse.ts ar inte en krok och kan inte lasa
+   * kontexten. Darfor skickas installningen ut till modulen varje gang den
+   * andras — ett stalle som vet, i stallet for ett per anropsplats.
+   */
+  useEffect(() => {
+    sattHaptik(installningar.knappvibration);
+  }, [installningar.knappvibration]);
 
   const spara = useCallback((nya: Installningar) => {
     setInstallningar(nya);

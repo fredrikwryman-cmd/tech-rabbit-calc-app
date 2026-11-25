@@ -7,8 +7,9 @@
 
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { useTema } from '../../design/tema';
 import { iVikt, TEXT, type Palett } from '../../design/tokens';
@@ -19,6 +20,7 @@ import {
   IkonRakna,
   type IkonProps,
 } from '../../komponenter/Ikoner';
+import { haptic, rm, useRorelse } from '../../lib/rorelse';
 
 const TABBHOJD = 58;
 
@@ -42,6 +44,27 @@ function RabbitFlik({ vald, farg }: { readonly vald: boolean; readonly farg: Pal
       <IkonRabbitAI farg={gra} detalj={gra} gnista={gra} />
     </View>
   );
+}
+
+/**
+ * Fliksikonen som studsar latt nar fliken valjs (rev-ux A11).
+ *
+ * `hero`-fjadern ar den med liten overstudsning, sa ikonen gar en gnutta
+ * forbi sitt lage och tillbaka. Med reducerad rorelse ligger den still:
+ * studsen ar forflyttning, och forflyttning ar just det som stangs av.
+ */
+function Flikikon({ vald, children }: { readonly vald: boolean; readonly children: ReactNode }): ReactNode {
+  const rorelse = useRorelse();
+  const skala = useSharedValue(1);
+
+  useEffect(() => {
+    if (!vald || rorelse.reducerad) return;
+    skala.value = 0.86;
+    skala.value = withSpring(1, rm.hero);
+  }, [vald, rorelse.reducerad, skala]);
+
+  const stil = useAnimatedStyle(() => ({ transform: [{ scale: skala.value }] }));
+  return <Animated.View style={stil}>{children}</Animated.View>;
 }
 
 const FLIKAR = [
@@ -88,15 +111,20 @@ export default function TabbLayout(): ReactNode {
         <Tabs.Screen
           key={namn}
           name={namn}
+          /* rev-ux haptikkartan: flikbyte ger `selection`. */
+          listeners={{ tabPress: () => haptic('val') }}
           options={{
             title: titel,
             tabBarAccessibilityLabel: titel,
-            tabBarIcon: ({ focused }) =>
-              Ikon === null ? (
-                <RabbitFlik vald={focused} farg={farg} />
-              ) : (
-                <Ikon farg={focused ? vald : ovald} />
-              ),
+            tabBarIcon: ({ focused }) => (
+              <Flikikon vald={focused}>
+                {Ikon === null ? (
+                  <RabbitFlik vald={focused} farg={farg} />
+                ) : (
+                  <Ikon farg={focused ? vald : ovald} />
+                )}
+              </Flikikon>
+            ),
             // Vald flik: vikt 800 och grön text. Övriga: vikt 500 och dämpad.
             tabBarLabel: ({ focused }) => (
               <Text

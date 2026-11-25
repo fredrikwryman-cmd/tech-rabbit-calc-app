@@ -8,7 +8,9 @@
   },
   "include": [
     "tester/**/*.ts",
-    "lib/chatt-karna.ts"
+    "lib/chatt-karna.ts",
+    "lib/levande-tal.ts",
+    "lib/handelsestrom.ts"
   ],
   "exclude": [
     "node_modules"

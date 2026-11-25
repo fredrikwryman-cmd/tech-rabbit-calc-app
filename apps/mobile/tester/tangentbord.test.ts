@@ -123,14 +123,26 @@ test('Klar-raden ritas bara pa iOS', () => {
   );
 });
 
-test('Android flyttar innehallet, iOS lagger till utrymme', () => {
+test('beteendet ar detsamma pa bada plattformarna', () => {
   const kod = readFileSync(join(ROT, 'komponenter', 'Tangentbord.tsx'), 'utf8');
-  // 'height' pa Android: fonstret krymper, och vyn foljer med. Stod det
-  // undefined — som det gjorde fore direktiv 33 — flyttades ingenting alls.
+  /*
+    Direktiv 33 satte 'height' pa Android, eftersom React Natives egen
+    KeyboardAvoidingView inte flyttade nagonting dar. Direktiv 41 bytte vyn
+    mot react-native-keyboard-controller, som foljer tangentbordets exakta
+    kurva LIKA pa bada plattformarna — da ska beteendet inte langre skilja
+    sig, och 'padding' galler bada.
+
+    Det gamla kravet var att beteendet var satt for bada plattformar. Det
+    galler fortfarande; det ar VARDET som inte langre behover vara tva.
+  */
   assert.match(
     kod,
-    /TANGENTBORDSBETEENDE = Platform\.OS === 'ios' \? 'padding' : 'height'/u,
-    'beteendet ska vara satt for bada plattformarna',
+    /TANGENTBORDSBETEENDE = 'padding'/u,
+    'beteendet ska vara ett och samma for bada plattformarna',
+  );
+  assert.ok(
+    !/TANGENTBORDSBETEENDE = Platform\.OS/u.test(kod),
+    'beteendet far inte bero pa plattform langre',
   );
 
   // Och ingen vy far ha en egen kopia av ternaren kvar.
@@ -178,10 +190,79 @@ test('listor med falt stanger tangentbordet nar man drar', () => {
   ] as const;
   for (const delar of krav) {
     const kod = readFileSync(join(ROT, ...delar), 'utf8');
+    /*
+      Direktiv 41: "interactive" duger ocksa — det ar samma vag ut, men
+      tangentbordet foljer fingret pa vagen ner. Kravet ar att listan HAR en
+      vag ut, inte vilken av de tva den ar.
+    */
     assert.match(
       kod,
-      /keyboardDismissMode="on-drag"/u,
+      /keyboardDismissMode="(on-drag|interactive)"/u,
       `${delar.join('/')}: listan saknar keyboardDismissMode`,
     );
   }
+});
+
+test('traden och Rakna-faltet drar ned tangentbordet med fingret', () => {
+  /*
+    Direktiv 41 steg 2: tangentbordet ska folja fingret nar man drar ned det
+    i chattens trad och i Rakna-faltet. Pa iOS gor keyboardDismissMode det;
+    pa Android kravs KeyboardGestureArea runt listan. Bada maste finnas,
+    annars ar gesten bara halv — och bara pa en plattform.
+  */
+  for (const delar of [
+    ['komponenter', 'RabbitAI.tsx'],
+    ['app', '(tabs)', 'index.tsx'],
+  ] as const) {
+    const namn = delar.join('/');
+    const kod = readFileSync(join(ROT, ...delar), 'utf8');
+    assert.match(kod, /keyboardDismissMode="interactive"/u, `${namn}: inte interaktivt`);
+    assert.match(
+      kod,
+      /<KeyboardGestureArea /u,
+      `${namn}: Android saknar gestytan runt listan`,
+    );
+    assert.match(
+      kod,
+      /import \{[^}]*KeyboardGestureArea[^}]*\} from 'react-native-keyboard-controller';/su,
+      `${namn}: KeyboardGestureArea ska komma ur react-native-keyboard-controller`,
+    );
+  }
+});
+
+test('tangentbordsvyerna kommer ur keyboard-controller, med provider i roten', () => {
+  /*
+    Direktiv 41: den exakta kurvan kraver att KeyboardAvoidingView kommer ur
+    react-native-keyboard-controller OCH att KeyboardProvider ligger over
+    allt som har ett falt. Utan providern gor vyn ingenting — tyst, vilket
+    ar varre an ett fel.
+  */
+  let antal = 0;
+  for (const [namn, kod] of filerna()) {
+    if (!kod.includes('<KeyboardAvoidingView')) continue;
+    antal += 1;
+    assert.ok(
+      /import \{[^}]*KeyboardAvoidingView[^}]*\} from 'react-native-keyboard-controller';/su.test(
+        kod,
+      ),
+      `${namn}: KeyboardAvoidingView ska komma ur react-native-keyboard-controller`,
+    );
+    const rnImport = /import \{[^}]*\} from 'react-native';/su.exec(kod)?.[0] ?? '';
+    assert.ok(
+      !/KeyboardAvoidingView/u.test(rnImport),
+      `${namn}: React Natives egen KeyboardAvoidingView ligger kvar`,
+    );
+    assert.ok(
+      kod.includes('automaticOffset'),
+      `${namn}: vyn ska mata sitt eget lage (automaticOffset)`,
+    );
+  }
+  assert.ok(antal >= 3, `hittade bara ${antal} vyer med KeyboardAvoidingView`);
+
+  const rot = readFileSync(join(ROT, 'app', '_layout.tsx'), 'utf8');
+  assert.match(rot, /<KeyboardProvider>/u, 'KeyboardProvider saknas i roten');
+  assert.match(
+    rot,
+    /import \{ KeyboardProvider \} from 'react-native-keyboard-controller';/u,
+  );
 });

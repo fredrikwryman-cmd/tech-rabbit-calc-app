@@ -30,8 +30,9 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { useTema } from '../design/tema';
 import { TEXT } from '../design/tokens';
-import { REDUCERAD_MS, useRorelse, YTA_MS } from '../lib/rorelse';
+import { REDUCERAD_MS, useHaptik, useRorelse, YTA_MS } from '../lib/rorelse';
 
+import { Bekraftelsedialog } from './Dialog';
 import { IkonPapperskorg, Svepbar } from './Svepbar';
 
 /** Menyrutans ungefärliga höjd, för att välja över eller under knappen. */
@@ -66,10 +67,25 @@ export function Historikrad({
 }: HistorikradProps): ReactNode {
   const { farg } = useTema();
   const rorelse = useRorelse();
+  const haptik = useHaptik();
   const skarm = useWindowDimensions();
   const menyknappen = useRef<ViewInstance>(null);
   /** Var menyn ska ritas på skärmen, eller null när den är stängd. */
   const [meny, setMeny] = useState<{ hoger: number; topp: number } | null>(null);
+  /**
+   * Direktiv 41: raden frågar innan den tas bort.
+   *
+   * Tillståndet bär SÄTTET att ta bort, inte bara ett ja eller nej: svepet
+   * vill fälla ihop raden först, menyn tar bort direkt. En dialog, två
+   * vägar in, och ingen risk att de två svarar olika.
+   */
+  const [fragan, setFragan] = useState<(() => void) | null>(null);
+
+  const bekraftaBorttagning = (gor: () => void): void => {
+    // Haptiken före en oåterkallelig handling (rev-ux haptikkartan).
+    haptik('varning');
+    setFragan(() => gor);
+  };
 
   /** Mäter knappen i fönstret och lägger menyn under den — eller över. */
   const oppnaMeny = (): void => {
@@ -85,7 +101,7 @@ export function Historikrad({
 
   return (
     <>
-      <Svepbar etikett={fraga} onTaBort={onTaBort}>
+      <Svepbar etikett={fraga} onTaBort={onTaBort} bekrafta={bekraftaBorttagning}>
         {(stangOmOppen) => (
           <Pressable
             accessibilityRole="button"
@@ -164,7 +180,7 @@ export function Historikrad({
               accessibilityLabel={`Ta bort ${fraga}`}
               onPress={() => {
                 setMeny(null);
-                onTaBort();
+                bekraftaBorttagning(onTaBort);
               }}
               style={styles.menyval}
             >
@@ -176,6 +192,19 @@ export function Historikrad({
           </Animated.View>
         )}
       </Modal>
+
+      <Bekraftelsedialog
+        oppen={fragan !== null}
+        titel="Ta bort uträkningen?"
+        text="Raden tas bort från telefonen. Det går inte att ångra."
+        bekraftaTitel="Ta bort"
+        onBekrafta={() => {
+          const gor = fragan;
+          setFragan(null);
+          gor?.();
+        }}
+        onAvbryt={() => setFragan(null)}
+      />
     </>
   );
 }

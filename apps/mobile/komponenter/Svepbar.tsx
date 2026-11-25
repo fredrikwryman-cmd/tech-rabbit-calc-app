@@ -55,6 +55,19 @@ export interface SvepbarProps {
   /** Körs när raden är ihopfälld. Då, inte innan — annars hoppar listan. */
   readonly onTaBort: () => void;
   /**
+   * Direktiv 41: fråga innan raden tas bort.
+   *
+   * Får Svepbar den här körs den i stället för borttagningen, med
+   * ihopfällningen som argument: värden visar sin bekräftelserad och anropar
+   * `ja()` när användaren sagt ja. Avbryter användaren händer ingenting och
+   * raden ligger kvar öppen.
+   *
+   * Dialogen bor hos värden och inte här, för att samma dialog ska kunna
+   * täcka BÅDA vägarna ut — svepet och …-menyn på raden. Två dialoger för
+   * samma borttagning hade kunnat glida isär.
+   */
+  readonly bekrafta?: (ja: () => void) => void;
+  /**
    * Radens innehåll.
    *
    * `stangOmOppen` returnerar sant när svepet var öppet och stängdes. Ett
@@ -64,7 +77,7 @@ export interface SvepbarProps {
   readonly children: (stangOmOppen: () => boolean) => ReactNode;
 }
 
-export function Svepbar({ etikett, onTaBort, children }: SvepbarProps): ReactNode {
+export function Svepbar({ etikett, onTaBort, bekrafta, children }: SvepbarProps): ReactNode {
   const { farg } = useTema();
   const rorelse = useRorelse();
   const x = useSharedValue(0);
@@ -84,6 +97,15 @@ export function Svepbar({ etikett, onTaBort, children }: SvepbarProps): ReactNod
     hojd.value = withTiming(0, { duration: tid }, (klar) => {
       if (klar) runOnJS(onTaBort)();
     });
+  };
+
+  /** Vägen ut ur Ta bort-knappen: fråga först när värden vill det. */
+  const tryckTaBort = (): void => {
+    if (bekrafta === undefined) {
+      taBortMedRorelse();
+      return;
+    }
+    bekrafta(taBortMedRorelse);
   };
 
   // Svepet följer fingret och fastnar vid Ta bort-ytan.
@@ -111,7 +133,7 @@ export function Svepbar({ etikett, onTaBort, children }: SvepbarProps): ReactNod
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Ta bort. ${etikett}`}
-        onPress={taBortMedRorelse}
+        onPress={tryckTaBort}
         style={[styles.tabort, { backgroundColor: farg['burnFill'] }]}
       >
         <IkonPapperskorg farg={farg['onBurn'] ?? '#fff'} />

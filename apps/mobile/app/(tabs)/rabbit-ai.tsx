@@ -16,8 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { medFelgrans } from '../../komponenter/Felgrans';
 import { Bakgrund } from '../../komponenter/Bakgrund';
+import { DelaSheet } from '../../komponenter/Delning';
 import { RabbitAI } from '../../komponenter/RabbitAI';
+import { ResultatSheet } from '../../komponenter/ResultatSheet';
 import { SKARMMARGINAL } from '../../design/tokens';
+import { useApp } from '../../lib/app-state';
+import { hittaRaknat, type Overlamning } from '../../lib/chatt-trad';
+import { postSomResultat, type Historikpost } from '../../lib/lagring';
+import { delningsbildensHuvudsvar, delningsbildensRader } from '../../lib/resultatvy';
 import {
   enhetsId,
   lasSamtalen,
@@ -27,7 +33,7 @@ import {
   type Samtal,
   type Stromning,
 } from '../../lib/chatt';
-import { useHaptik } from '../../lib/rorelse';
+import { haptic, useHaptik } from '../../lib/rorelse';
 
 function RabbitAiSkarm(): ReactNode {
   const router = useRouter();
@@ -35,6 +41,8 @@ function RabbitAiSkarm(): ReactNode {
   const parametrar = useLocalSearchParams<{ fragaText?: string; n?: string }>();
   const haptik = useHaptik();
   const insets = useSafeAreaInsets();
+  /** Historiken bär uträkningarna som ligger som kort i tråden (rev-ux 5.6). */
+  const { historik } = useApp();
 
   const [meddelanden, setMeddelanden] = useState<readonly Meddelande[]>([]);
   const [strommar, setStrommar] = useState<string | null>(null);
@@ -43,8 +51,19 @@ function RabbitAiSkarm(): ReactNode {
   const [slutOm, setSlutOm] = useState<number | null>(null);
   const [utkast, setUtkast] = useState('');
   const [samtal, setSamtal] = useState<readonly Samtal[]>([]);
+  /** Uträkningen som öppnas som ark ur tråden, eller null. */
+  const [oppenPost, setOppenPost] = useState<Historikpost | null>(null);
+  const [delaOppen, setDelaOppen] = useState(false);
 
   const stromningen = useRef<Stromning | null>(null);
+  /**
+   * Frågan chatten lämnade över till Räkna, och när (rev-ux 5.6).
+   *
+   * Räkna äger räkningen. Chatten minns bara överlämningen och letar efter
+   * svaret i historiken när fliken visas igen — ingen ny väg mellan
+   * flikarna, och ingen kopia av räknemotorns svar.
+   */
+  const overlamnat = useRef<Overlamning | null>(null);
   const mittId = useRef<string | null>(null);
   /** Samtalets id. Nytt samtal ger ett nytt, så historiken inte skrivs över. */
   const samtalsId = useRef<string>(`s${Date.now()}`);
@@ -83,6 +102,40 @@ function RabbitAiSkarm(): ReactNode {
   useFocusEffect(hamtaSamtal);
 
   /**
+   * Uträkningen som kommer hem från Räkna (rev-ux 5.6, direktiv 40 steg 6).
+   *
+   * Chatten lämnade över en fråga och minns när. Räkna räknar och sparar
+   * posten i historiken; när den syns här läggs den i tråden som ett
+   * innehållskort. Kortet bär bara id:t — svaret läses ur historiken, så en
+   * post som ändras eller tas bort inte står kvar som en kopia i chatten.
+   */
+  useEffect(() => {
+    const vantar = overlamnat.current;
+    if (vantar === null) return;
+    const redan = meddelanden.flatMap((m) => (m.raknatId === undefined ? [] : [m.raknatId]));
+    const post = hittaRaknat(historik, vantar, redan);
+    if (post === null) return;
+    overlamnat.current = null;
+    const nar = Date.parse(post.datum);
+    const kort: Meddelande = {
+      roll: 'du',
+      at: Number.isNaN(nar) ? Date.now() : nar,
+      // Texten är kortets innehåll i ord, för VoiceOver och för en läsare
+      // som saknar posten.
+      text: `${post.resultat} — ${post.etikett}`,
+      raknatId: post.id,
+    };
+    const hela = [...meddelanden, kort];
+    setMeddelanden(hela);
+    // Den stora handlingen landar (rev-ux 5.6 och haptikkartan).
+    haptic('bekraftelse');
+    void sparaSamtal(hela);
+    // Bara historiken och tråden styr. sparaSamtal skriver om hela tråden
+    // och är avsiktligt utanför: den läser inget av det effekten beror på.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historik, meddelanden]);
+
+  /**
    * Sparar samtalet lokalt.
    *
    * Hela tråden skrivs om varje gång i stället för att läggas till: tråden är
@@ -106,7 +159,12 @@ function RabbitAiSkarm(): ReactNode {
     const id = mittId.current;
     if (id === null) return;
 
-    const trad: readonly Meddelande[] = [...meddelanden, { roll: 'jag', text: fragan }];
+    // Direktiv 40: tiden foljer med meddelandet. Den star i bubblan och
+    // avgor gruppen och datumrubriken (rev-ux 5.2).
+    const trad: readonly Meddelande[] = [
+      ...meddelanden,
+      { roll: 'jag', text: fragan, at: Date.now() },
+    ];
     setMeddelanden(trad);
     setUtkast('');
     // Tom sträng betyder "tänker" (21c-1). Första biten text ger 21c-2.
@@ -140,6 +198,7 @@ function RabbitAiSkarm(): ReactNode {
             const sekunder = Math.max(1, Math.ceil(slut.retryAfter));
             const svar: Meddelande = {
               roll: 'du',
+              at: Date.now(),
               text: `För många frågor på kort tid. Försök igen om ${sekunder} sekunder — frågan är kvar.`,
             };
             const hela = [...trad, svar];
@@ -151,6 +210,7 @@ function RabbitAiSkarm(): ReactNode {
             haptik('varning');
             const svar: Meddelande = {
               roll: 'du',
+              at: Date.now(),
               text:
                 slut.typ === 'ingen-anslutning'
                   ? 'Ingen anslutning. Frågan är kvar — försök igen.'
@@ -163,6 +223,7 @@ function RabbitAiSkarm(): ReactNode {
           }
           const svar: Meddelande = {
             roll: 'du',
+            at: Date.now(),
             text: samlat,
             ...(slut.sort === 'klart' && slut.raknaPa !== undefined
               ? { raknaPa: slut.raknaPa }
@@ -188,6 +249,7 @@ function RabbitAiSkarm(): ReactNode {
 
   function nyttSamtal(): void {
     stromningen.current?.stoppa();
+    overlamnat.current = null;
     samtalsId.current = `s${Date.now()}`;
     setAktivtId(samtalsId.current);
     setMeddelanden([]);
@@ -216,6 +278,7 @@ function RabbitAiSkarm(): ReactNode {
             // id:t till serverns tolkning följer med, så att Räkna räknar på
             // samma tolkning som chatten provade.
             stromningen.current?.stoppa();
+            overlamnat.current = { fraga, nar: Date.now() };
             router.navigate({
               pathname: '/',
               params: {
@@ -230,6 +293,9 @@ function RabbitAiSkarm(): ReactNode {
           aktivtSamtal={aktivtId}
           onOppnaSamtal={(s) => {
             stromningen.current?.stoppa();
+            // Ett annat samtal öppnas: en uträkning som är på väg hem hör
+            // till tråden den lämnades ifrån, inte till den som öppnas nu.
+            overlamnat.current = null;
             samtalsId.current = s.id;
             setAktivtId(s.id);
             setMeddelanden(s.meddelanden);
@@ -250,8 +316,51 @@ function RabbitAiSkarm(): ReactNode {
             setSamtal([]);
             nyttSamtal();
           }}
+          raknade={historik}
+          onOppnaRaknat={setOppenPost}
         />
       </View>
+
+      {/*
+        Resultatarket ur tråden (direktiv 40 steg 6). Samma begränsning som i
+        Historik: posten bär svaret, inte indata, så "Räkna om" finns inte —
+        och "Räkna vidare" lämnar frågan till Räkna, som räknar om den.
+      */}
+      {oppenPost === null ? null : (
+        <ResultatSheet
+          oppen={!delaOppen}
+          fraga={oppenPost.fraga}
+          etikett={oppenPost.etikett}
+          resultat={postSomResultat(oppenPost)}
+          forklaring={oppenPost.forklaring}
+          onStang={() => setOppenPost(null)}
+          onNyFraga={() => {
+            setOppenPost(null);
+            router.navigate('/');
+          }}
+          onRaknaOm={() => undefined}
+          onDela={() => setDelaOppen(true)}
+          onRaknaVidare={() => {
+            const fragan = oppenPost.fraga;
+            setOppenPost(null);
+            router.navigate({ pathname: '/', params: { raknaPa: fragan, n: String(Date.now()) } });
+          }}
+        />
+      )}
+
+      {/* Vy 10: dela uträkningen. Inget skickas till vår server. */}
+      {oppenPost === null ? null : (
+        <DelaSheet
+          oppen={delaOppen}
+          onStang={() => setDelaOppen(false)}
+          innehall={{
+            fraga: oppenPost.fraga,
+            ...delningsbildensHuvudsvar(postSomResultat(oppenPost), oppenPost.etikett),
+            villkor: oppenPost.villkor ?? [],
+            rader: delningsbildensRader(postSomResultat(oppenPost)),
+          }}
+        />
+      )}
     </Bakgrund>
   );
 }

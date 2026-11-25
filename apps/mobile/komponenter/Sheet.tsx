@@ -12,7 +12,6 @@
 
 import { useEffect, type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -21,13 +20,24 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import Animated, {
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
+import { Integritetsslojan } from './Integritetslager';
 import { KLAR_ID_ARK, Klarrad, TANGENTBORDSBETEENDE } from './Tangentbord';
 import { useTema } from '../design/tema';
 import { SKARMMARGINAL, TEXT } from '../design/tokens';
-import { REDUCERAD_MS, SKARM_MS, useRorelse } from '../lib/rorelse';
+import { REDUCERAD_MS, rm, useHaptik, useRorelse } from '../lib/rorelse';
+import { useAnmalArk } from '../lib/ark';
 
 /** Avståndet från skärmens överkant, enligt KOMPONENTER.md. */
 const TOPP = 62;
@@ -44,29 +54,66 @@ export interface SheetProps {
 export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): ReactNode {
   const { farg } = useTema();
   const rorelse = useRorelse();
+  const haptik = useHaptik();
   const { height } = useWindowDimensions();
 
+  /* Sidan bakom sjunker sa lange arket ar oppet (A3). Se lib/ark.tsx. */
+  useAnmalArk(oppen);
+
   const y = useSharedValue(height);
+  const dra = useSharedValue(0);
   const opacitet = useSharedValue(0);
+  const arkhojd = Math.max(1, height - TOPP);
 
   useEffect(() => {
     if (!oppen) {
       y.value = height;
+      dra.value = 0;
       opacitet.value = 0;
       return;
     }
+    dra.value = 0;
     if (rorelse.reducerad) {
       y.value = 0;
       opacitet.value = withTiming(1, { duration: REDUCERAD_MS });
     } else {
       opacitet.value = 1;
-      y.value = withTiming(0, rorelse.toning(SKARM_MS));
+      y.value = withSpring(0, rm.smooth);
     }
-  }, [oppen, height, rorelse, y, opacitet]);
+  }, [oppen, height, rorelse.reducerad, y, dra, opacitet]);
+
+  function stangNer(): void {
+    dra.value = 0;
+    y.value = height;
+    onStang();
+  }
+
+  function snappTillbaka(): void {
+    haptik('mjuk');
+  }
+
+  /** Arket foljer fingret; dra ned stanger, slapp under halva vagen fjadrar. */
+  const dragning = Gesture.Pan()
+    .enabled(!rorelse.reducerad)
+    .onUpdate((e) => {
+      dra.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (dra.value > arkhojd / 2 || e.velocityY > 900) {
+        runOnJS(stangNer)();
+        return;
+      }
+      dra.value = withSpring(0, rm.smooth);
+      runOnJS(snappTillbaka)();
+    });
 
   const stil = useAnimatedStyle(() => ({
-    transform: [{ translateY: y.value }],
+    transform: [{ translateY: y.value + dra.value }],
     opacity: opacitet.value,
+  }));
+
+  const dimmer = useAnimatedStyle(() => ({
+    opacity: interpolate(y.value + dra.value, [0, arkhojd], [rm.recedeDim, 0], 'clamp'),
   }));
 
   return (
@@ -79,7 +126,18 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
       statusBarTranslucent
     >
       <View style={styles.rot}>
+        {/* Skarmen bakom morknar (rm.recedeDim). Tryck utanfor stanger. */}
+        <Animated.View style={[styles.dimmer, dimmer]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Stäng ${titel.toLowerCase()}`}
+            onPress={stangNer}
+            style={styles.fyll}
+          />
+        </Animated.View>
         <Animated.View style={[styles.sheet, stil, { top: TOPP, backgroundColor: farg['bg'] }]}>
+          <GestureDetector gesture={dragning}>
+            <View>
           <View style={[styles.grabber, { backgroundColor: farg['controlBorder'] }]} />
           <View style={styles.huvud}>
             <Text
@@ -105,9 +163,13 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
               </Svg>
             </Pressable>
           </View>
+            </View>
+          </GestureDetector>
 
           <KeyboardAvoidingView
             behavior={TANGENTBORDSBETEENDE}
+            /* Vyn mäter sitt eget läge: arkets överkant räknas in (direktiv 41). */
+            automaticOffset
             style={styles.fyll}
           >
             <ScrollView
@@ -121,6 +183,13 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
             <Klarrad id={KLAR_ID_ARK} />
           </KeyboardAvoidingView>
         </Animated.View>
+
+        {/*
+          rev-ux 2.4: arket ligger i ett eget fönster, så appens slöja når
+          inte hit. Den ritas därför en gång till här — annars vore just
+          uträkningen det enda som syntes i app-växlaren.
+        */}
+        <Integritetsslojan />
       </View>
     </Modal>
   );
@@ -129,6 +198,7 @@ export function Sheet({ oppen, titel, onStang, children, fot }: SheetProps): Rea
 const styles = StyleSheet.create({
   rot: { flex: 1 },
   fyll: { flex: 1 },
+  dimmer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#000' },
   sheet: {
     position: 'absolute',
     left: 0,

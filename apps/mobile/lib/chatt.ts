@@ -66,8 +66,24 @@ export type Roll = 'du' | 'jag';
 export interface Meddelande {
   readonly roll: Roll;
   readonly text: string;
+  /**
+   * Direktiv 40: när meddelandet skrevs, i millisekunder.
+   *
+   * Tiden står inne i bubblan och styr grupperna och datumrubrikerna
+   * (rev-ux 5.2). Fältet är valfritt: trådar sparade före direktiv 40 bär
+   * ingen tid, och de ska fortsätta att visas — utan tid i bubblan och
+   * grupperade på avsändaren ensam (lib/chatt-trad.ts).
+   */
+  readonly at?: number;
   /** Frågan som ska flyttas till Räkna, när svaret lämnade över (12c). */
   readonly raknaPa?: string;
+  /**
+   * Direktiv 40, rev-ux 5.6: id:t till historikposten Räkna sparade.
+   *
+   * Bär meddelandet det här är det ett innehållskort i tråden — uträkningen
+   * som kom hem — och inte en text. Ett tryck öppnar resultatarket.
+   */
+  readonly raknatId?: string;
   /**
    * Direktiv 36: id:t till tolkningen servern redan gjort av `raknaPa`.
    *
@@ -104,6 +120,10 @@ function lasMeddelande(v: unknown): Meddelande[] {
     {
       roll: m['roll'],
       text: m['text'],
+      // Tiden läses bara när den är ett brukbart tal: en trasig tid ska ge
+      // en bubbla utan tid, aldrig "NaN" i hörnet.
+      ...(typeof m['at'] === 'number' && Number.isFinite(m['at']) ? { at: m['at'] } : {}),
+      ...(typeof m['raknatId'] === 'string' ? { raknatId: m['raknatId'] } : {}),
       ...(typeof m['raknaPa'] === 'string' ? { raknaPa: m['raknaPa'] } : {}),
       ...(typeof m['tolkningsId'] === 'string' ? { tolkningsId: m['tolkningsId'] } : {}),
       ...(m['stoppat'] === true ? { stoppat: true } : {}),

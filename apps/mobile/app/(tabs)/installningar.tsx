@@ -68,7 +68,13 @@ function InstallningarSkarm(): ReactNode {
 
         <DestruktivKnapp
           titel="Rensa historik"
-          onPress={() => setFragar(true)}
+          onPress={() => {
+            // Direktiv 41: varningen kommer FORE frågan, som i Historik och
+            // i chattens samtalspanel. Haptikkartan säger varning före en
+            // oåterkallelig handling, inte efter att den redan är gjord.
+            haptik('varning');
+            setFragar(true);
+          }}
           ikon={
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
               <Path
@@ -92,8 +98,6 @@ function InstallningarSkarm(): ReactNode {
         onBekrafta={() => {
           rensa();
           setFragar(false);
-          // Varning när rensningen är gjord, enligt RORELSE-HAPTIK.md vy 09b.
-          haptik('varning');
         }}
       />
     </Skarm>

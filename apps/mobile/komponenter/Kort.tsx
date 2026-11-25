@@ -7,7 +7,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn,
   useAnimatedStyle,
@@ -17,10 +17,10 @@ import Animated, {
 import Svg, { Path } from 'react-native-svg';
 
 import { useTema } from '../design/tema';
-import { TEXT } from '../design/tokens';
+import { SKARMMARGINAL, TEXT } from '../design/tokens';
 import { REDUCERAD_MS, TRYCK_MS, useHaptik, useRorelse, YTA_MS } from '../lib/rorelse';
 
-import { IkonRabbitAI } from './Ikoner';
+import { LoggaTechRabbitAI } from './Bilder';
 
 // ---------------------------------------------------------------------------
 // Exempelkort
@@ -248,16 +248,27 @@ export function Stegrad({ nr, uttryck, resultat, forst, fordrojning }: StegradPr
  * Kortet på Hem som öppnar Rabbit AI.
  *
  * KOMPONENTER.md v4: radie 22, padding 16/14, `card` med 1 pt grön kant,
- * symbol 26, märket GRATIS i `greenSoft`/`onGreenSoft`, rubrik 18/23 900,
- * text 14/20 `muted` och länkraden 15/800 i `greenText`.
- *
+ * märket GRATIS i `greenSoft`/`onGreenSoft` och länkraden i `greenText`.
  * Kanten är `greenEdge`, som lades till i tokens.json i direktiv 24.
- * tills tokenen finns.
+ *
+ * ## Direktiv 37
+ *
+ * Kaninsymbolen är utbytt mot TechRabbit AI-loggan, som ligger till vänster
+ * i en egen spalt lika hög som kortets innehåll. Texten står till höger om
+ * den. Loggan är liggande, 2,13 : 1: ritad lika hög som kortet hade den
+ * blivit bredare än hela skärmen, så spalten är full höjd och bilden så stor
+ * som ryms i den utan att textspalten blir oläslig. Texten är satt ett steg
+ * mindre för att kortet ska behålla sin höjd.
  */
 export function Premiumkort({ onPress }: { readonly onPress: () => void }): ReactNode {
   const { farg } = useTema();
   const rorelse = useRorelse();
   const haptik = useHaptik();
+  const { width } = useWindowDimensions();
+  // Kortets inre bredd: skärmen minus skärmmarginalen och kortets padding.
+  const inre = width - SKARMMARGINAL * 2 - 32;
+  const loggbredd = Math.round(Math.min(132, Math.max(86, inre * 0.38)));
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -275,28 +286,26 @@ export function Premiumkort({ onPress }: { readonly onPress: () => void }): Reac
         },
       ]}
     >
-      <View style={styles.premiumhuvud}>
-        <IkonRabbitAI
-          storlek={26}
-          farg={farg['text'] ?? '#000'}
-          detalj={farg['greenIcon'] ?? '#1ED63C'}
-          gnista={farg['greenIcon'] ?? '#1ED63C'}
-        />
+      <View style={[styles.premiumlogga, { width: loggbredd }]}>
+        <LoggaTechRabbitAI bredd={loggbredd} />
+      </View>
+
+      <View style={styles.premiumtext}>
         <View style={[styles.gratis, { backgroundColor: farg['greenSoft'] }]}>
           <Text maxFontSizeMultiplier={1.3} style={[styles.gratistext, { color: farg['onGreenSoft'] }]}>
             GRATIS
           </Text>
         </View>
+        <Text maxFontSizeMultiplier={1.5} style={[styles.premiumtitel, { color: farg['text'] }]}>
+          TechRabbit kan mer än att räkna
+        </Text>
+        <Text maxFontSizeMultiplier={1.6} style={[styles.premiumbrod, { color: farg['muted'] }]}>
+          Chatta med Rabbit AI om vad du vill.
+        </Text>
+        <Text maxFontSizeMultiplier={1.5} style={[styles.premiumlank, { color: farg['greenText'] }]}>
+          Starta chatten →
+        </Text>
       </View>
-      <Text maxFontSizeMultiplier={1.5} style={[styles.premiumtitel, { color: farg['text'] }]}>
-        TechRabbit kan mer än att räkna
-      </Text>
-      <Text maxFontSizeMultiplier={1.6} style={[styles.premiumtext, { color: farg['muted'] }]}>
-        Chatta med Rabbit AI om vad du vill. Gratis.
-      </Text>
-      <Text maxFontSizeMultiplier={1.5} style={[styles.premiumlank, { color: farg['greenText'] }]}>
-        Starta chatten →
-      </Text>
     </Pressable>
   );
 }
@@ -326,11 +335,20 @@ const styles = StyleSheet.create({
   stegnummer: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   stegtext: { flex: 1, gap: 2 },
 
-  premium: { borderRadius: 22, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
-  premiumhuvud: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  gratis: { height: 22, borderRadius: 11, paddingHorizontal: 9, justifyContent: 'center' },
-  gratistext: { fontSize: 11, fontFamily: 'Archivo_800ExtraBold', letterSpacing: 0.6, includeFontPadding: false },
-  premiumtitel: { fontSize: 18, lineHeight: 23, fontFamily: 'Archivo_900Black' },
-  premiumtext: { fontSize: 14, lineHeight: 20, fontFamily: 'Archivo_500Medium' },
-  premiumlank: { fontSize: 15, fontFamily: 'Archivo_800ExtraBold', includeFontPadding: false, marginTop: 2 },
+  premium: {
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  premiumlogga: { justifyContent: 'center' },
+  premiumtext: { flex: 1, gap: 2 },
+  gratis: { alignSelf: 'flex-start', height: 20, borderRadius: 10, paddingHorizontal: 8, justifyContent: 'center' },
+  gratistext: { fontSize: 10, fontFamily: 'Archivo_800ExtraBold', letterSpacing: 0.6, includeFontPadding: false },
+  premiumtitel: { fontSize: 15, lineHeight: 20, fontFamily: 'Archivo_900Black' },
+  premiumbrod: { fontSize: 13, lineHeight: 18, fontFamily: 'Archivo_500Medium' },
+  premiumlank: { fontSize: 14, fontFamily: 'Archivo_800ExtraBold', includeFontPadding: false, marginTop: 1 },
 });

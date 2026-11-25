@@ -31,9 +31,11 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   FadeIn,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
@@ -42,11 +44,13 @@ import type { Faktum, Resultat } from '@techrabbit/engine';
 
 import { useTema } from '../design/tema';
 import { SKARMMARGINAL, TEXT } from '../design/tokens';
-import { REDUCERAD_MS, SKARM_MS, useHaptik, useRorelse, YTA_MS } from '../lib/rorelse';
+import { REDUCERAD_MS, rm, useHaptik, useRorelse, YTA_MS } from '../lib/rorelse';
+import { useAnmalArk } from '../lib/ark';
 import { valjVy } from '../lib/resultatvy';
 import { sammanfattaFakta } from '../lib/tolkning';
 
 import { LitenKnapp, PrimarKnapp, Textknapp } from './Knapp';
+import { LevandeTal } from './LevandeTal';
 import { Vardagsresultat } from './Resultatvyer';
 import { DinFragaKort, Stegrad } from './Kort';
 import { Harlettvarde, Hopfallbar, Praktisktpris, Redigerbartvarde, Resultatrad, Uppslagsvillkor, Villkorsrad, type Uppslaget } from './Resultatdelar';
@@ -133,28 +137,94 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
   const [andrade, setAndrade] = useState<Record<string, string>>({});
   useEffect(() => setAndrade({}), [resultat]);
 
-  // Med reducerad rörelse tonas sheeten in i stället för att glida.
+  /**
+   * Arket (A3, rev-ux 4.1).
+   *
+   * Upp underifran med smooth-fjadern, och sedan foljer det fingret: dra ar
+   * fingrets vag nedat, y arkets egen. Med reducerad rorelse tonas det in i
+   * stallet for att glida, och gesten ar avstangd — en yta som inte ror sig
+   * kan inte folja ett finger.
+   */
   const y = useSharedValue(height);
+  const dra = useSharedValue(0);
   const opacitet = useSharedValue(0);
+  /** Arkets hojd: vagen det har att falla, och halva vagen till troskeln. */
+  const arkhojd = Math.max(1, height - TOPP);
 
   useEffect(() => {
     if (!oppen) {
       y.value = height;
+      dra.value = 0;
       opacitet.value = 0;
       return;
     }
+    dra.value = 0;
     if (rorelse.reducerad) {
       y.value = 0;
       opacitet.value = withTiming(1, { duration: REDUCERAD_MS });
     } else {
       opacitet.value = 1;
-      y.value = withTiming(0, rorelse.toning(SKARM_MS));
+      y.value = withSpring(0, rm.smooth);
     }
-  }, [oppen, height, rorelse.reducerad, y, opacitet, rorelse]);
+  }, [oppen, height, rorelse.reducerad, y, dra, opacitet]);
+
+  /**
+   * haptic success nar svaret landar (direktiv 39 steg 5).
+   *
+   * Sparren i lib/rorelse.ts gor att den har och den i Rakna-skarmen inte
+   * blir tva vibrationer: 80 ms racker for att de ska bli en.
+   */
+  useEffect(() => {
+    if (oppen) haptik('bekraftelse');
+    // Bara oppningen ska utlosa den, inte varje ny render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oppen]);
+
+  /** Stanger pa riktigt och lagger tillbaka arket, sa nasta oppning ar ren. */
+  function stangNer(): void {
+    dra.value = 0;
+    y.value = height;
+    onStang();
+  }
+
+  function snappTillbaka(): void {
+    haptik('mjuk');
+  }
+
+  /**
+   * Dra ned stanger; slapp under halva vagen fjadrar tillbaka (4.1 punkt 6).
+   *
+   * Gesten sitter pa arkets huvud — grabbern och rubrikraden — och inte pa
+   * hela arket. Innehallet ar en ScrollView, och tva gester som bada vill ha
+   * fingrets lodrata rorelse slass om varje drag.
+   */
+  const dragning = Gesture.Pan()
+    .enabled(!rorelse.reducerad)
+    .onUpdate((e) => {
+      dra.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (dra.value > arkhojd / 2 || e.velocityY > 900) {
+        runOnJS(stangNer)();
+        return;
+      }
+      dra.value = withSpring(0, rm.smooth);
+      runOnJS(snappTillbaka)();
+    });
 
   const stil = useAnimatedStyle(() => ({
-    transform: [{ translateY: y.value }],
+    transform: [{ translateY: y.value + dra.value }],
     opacity: opacitet.value,
+  }));
+
+  /**
+   * Morklaggningen bakom arket (rm.recedeDim).
+   *
+   * Den foljer arkets lage: dras arket ned ljusnar skarmen bakom i samma
+   * takt, sa att fingret kanns som det som styr ljuset.
+   */
+  const dimmer = useAnimatedStyle(() => ({
+    opacity: interpolate(y.value + dra.value, [0, arkhojd], [rm.recedeDim, 0], 'clamp'),
   }));
 
   /**
@@ -195,6 +265,9 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
    */
   const vy = valjVy(resultat);
 
+  /* Sidan bakom sjunker sa lange arket ar oppet. Se lib/ark.tsx. */
+  useAnmalArk(oppen);
+
   /**
    * Svep åt höger = tillbaka till det förra svaret i kedjan (05d).
    *
@@ -222,7 +295,18 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
       statusBarTranslucent
     >
       <View style={styles.rot}>
+        {/* Skarmen bakom morknar. Ett tryck utanfor arket stanger det. */}
+        <Animated.View style={[styles.dimmer, dimmer]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Stäng resultatet"
+            onPress={stangNer}
+            style={styles.fyllyta}
+          />
+        </Animated.View>
         <Animated.View style={[styles.sheet, stil, { top: TOPP, backgroundColor: farg['bg'] }]}>
+          <GestureDetector gesture={dragning}>
+            <View>
           <View style={[styles.grabber, { backgroundColor: farg['controlBorder'] }]} />
           <View style={styles.huvud}>
             <Text
@@ -248,6 +332,8 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
               </Svg>
             </Pressable>
           </View>
+            </View>
+          </GestureDetector>
 
           <ScrollView
             contentContainerStyle={styles.innehall}
@@ -297,36 +383,41 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
                 <Vardagsresultat sort={vy} resultat={resultat} etikett={etikett} />
               ) : (
               <View style={[styles.kort, { backgroundColor: farg['card'] }]}>
-              <Animated.View entering={FadeIn.duration(tid)}>
+              {/*
+                Direktiv 39 steg 5: innehallet kommer i ordningen tal,
+                etikett, forklaring, knappar — 35 ms mellan. Ordningen i
+                LAYOUTEN ar designens och orord: etiketten star kvar over
+                talet. Det som andrats ar vad som kommer forst.
+              */}
+              <Animated.View entering={FadeIn.duration(tid).delay(rorelse.ordning(1))}>
                 <Text
                   maxFontSizeMultiplier={1.6}
                   style={[TEXT['body'], styles.etikett, { color: farg['muted'] }]}
                 >
                   {etikett}
                 </Text>
-                <View style={styles.talrad}>
-                  {/*
-                    Svaret är grönt: det är sidans enda tal som BÄR svaret.
-                    `greenAnswer` är klargrönt i BÅDA temana (direktiv 27) —
-                    till skillnad från `greenText`, som mörknar i ljust läge.
-                  */}
-                  <Text
-                    maxFontSizeMultiplier={1.4}
-                    style={[TEXT['result'], styles.tal, { color: farg['greenAnswer'] }]}
-                  >
-                    {resultat.formatted}
-                  </Text>
-                  <Text
-                    maxFontSizeMultiplier={1.4}
-                    style={[TEXT['resultUnit'], { color: farg['greenAnswer'] }]}
-                  >
-                    {resultat.unit}
-                  </Text>
-                </View>
+              </Animated.View>
+              <Animated.View entering={FadeIn.duration(tid)}>
+                {/*
+                  Svaret ar gront: det ar sidans enda tal som BAR svaret.
+                  greenAnswer ar klargront i BADA temana (direktiv 27) — till
+                  skillnad fran greenText, som morknar i ljust lage.
+
+                  Direktiv 39 steg 3: talet rullar in siffra for siffra och
+                  krymper nar det blir langt (A10). Delningsbilden ritar sitt
+                  eget tal i komponenter/Delning.tsx och ar orord.
+                */}
+                <LevandeTal
+                  varde={resultat.formatted}
+                  enhet={resultat.unit}
+                  etikett={`${etikett}: ${resultat.formatted} ${resultat.unit}`}
+                  stil={{ ...TEXT['result'], ...styles.tal, color: farg['greenAnswer'] }}
+                  enhetsstil={{ ...TEXT['resultUnit'], color: farg['greenAnswer'] }}
+                />
               </Animated.View>
 
               {villkor.length > 0 ? (
-                <Animated.View entering={FadeIn.duration(tid).delay(rorelse.reducerad ? 0 : 80)}>
+                <Animated.View entering={FadeIn.duration(tid).delay(rorelse.ordning(2))}>
                   {/* De uppslagna villkoren står för sig: de går att rätta. */}
                   <Villkorsrad
                     villkor={villkor.filter((v) => !uppslag.some((u) => u.text === v))}
@@ -446,7 +537,7 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
 
             {/* ------------------------------------------------ förklaring */}
             <Animated.View
-              entering={FadeIn.duration(tid).delay(rorelse.reducerad ? 0 : 120)}
+              entering={FadeIn.duration(tid).delay(rorelse.ordning(3))}
               style={[styles.kort, { backgroundColor: farg['card'] }]}
             >
               <Text
@@ -511,7 +602,10 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
             ) : null}
           </ScrollView>
 
-          <View style={styles.fot}>
+          <Animated.View
+            entering={FadeIn.duration(tid).delay(rorelse.ordning(4))}
+            style={styles.fot}
+          >
             {/*
               "Räkna vidare" lägger till en ändring och låter MOTORN räkna om
               hela frågan. Ett svar motorn inte kunde räkna går inte att
@@ -529,7 +623,7 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
               />
               <Textknapp titel="Ny fråga" onPress={onNyFraga} />
             </View>
-          </View>
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>
@@ -617,6 +711,9 @@ function Momsrad({
 const styles = StyleSheet.create({
   rot: { flex: 1 },
   fyll: { flex: 1 },
+  fyllyta: { flex: 1 },
+  /* Morklaggningen bakom arket. Styrkan kommer ur rm.recedeDim. */
+  dimmer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#000' },
   sheet: {
     position: 'absolute',
     left: 0,

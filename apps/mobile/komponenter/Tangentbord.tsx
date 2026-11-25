@@ -25,18 +25,22 @@ import { useTema } from '../design/tema';
 import { TEXT } from '../design/tokens';
 
 /**
- * KeyboardAvoidingView-beteendet, per plattform (direktiv 33).
+ * KeyboardAvoidingView-beteendet (direktiv 33, omgjort i direktiv 41).
  *
- * iOS lägger till utrymme under innehållet (`padding`). Android får `height`:
- * aktivitetens fönster krymper (`softwareKeyboardLayoutMode: "resize"` i
- * app.json), och vyn följer med i höjd, så fältet och knappen under det
- * stannar ovanför tangentbordet. `undefined` — det som stod här förut —
- * betydde att Android inte flyttade någonting alls.
+ * Direktiv 41: vyerna använder nu `KeyboardAvoidingView` ur
+ * react-native-keyboard-controller i stället för React Natives egen. Den
+ * följer tangentbordets exakta kurva och gör det LIKA på iOS och Android,
+ * så beteendet behöver inte längre skilja sig per plattform: `padding`
+ * gäller båda. (Direktiv 33 fick sätta `height` på Android eftersom RN:s
+ * egen vy inte flyttade någonting där.)
+ *
+ * `softwareKeyboardLayoutMode: "resize"` ligger kvar i app.json: fönstret
+ * ska fortsätta krympa, annars har ingenting att följa.
  *
  * Konstanten står på ett ställe: fyra vyer läste förut samma ternär, och
  * fyra kopior hade kunnat glida isär.
  */
-export const TANGENTBORDSBETEENDE = Platform.OS === 'ios' ? 'padding' : 'height';
+export const TANGENTBORDSBETEENDE = 'padding';
 
 /** Skärmarna: frågefältet och svarsfältet. */
 export const KLAR_ID = 'tr-klar-skarm';
