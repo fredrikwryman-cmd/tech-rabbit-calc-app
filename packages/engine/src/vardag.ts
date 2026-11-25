@@ -203,6 +203,145 @@ export function comparePrices(varor: readonly Vara[], alternativ?: ComparePrices
 }
 
 // ---------------------------------------------------------------------------
+// 30b. Vad en annan mängd kostar
+// ---------------------------------------------------------------------------
+
+export interface UnitPriceKand {
+  /** Priset som står i frågan. */
+  readonly pris: number;
+  /** Mängden det priset gäller: 3 st, 250 g, 5 kg. */
+  readonly mangd: number;
+  /** Mängdens enhet. Tom betyder styck. */
+  readonly enhet?: string;
+}
+
+export interface UnitPriceOnskad {
+  /** Mängden frågan vill veta priset för. */
+  readonly mangd: number;
+  /** Dess enhet, när den skiljer sig från den kända. Tom betyder samma. */
+  readonly enhet?: string;
+}
+
+export interface UnitPriceAlternativ {
+  readonly valuta?: string;
+  readonly perPackage?: PerPackage;
+}
+
+/**
+ * Vad en annan mängd kostar, när priset för en mängd är känt.
+ *
+ * "3 st för 25 kr, vad kostar 7?" — den vanligaste frågan i en affär, och den
+ * föll förut på "Det här kan jag inte räkna än" (direktiv 35). `comparePrices`
+ * jämför två varor med varandra; den här räknar om EN vara till en annan
+ * mängd, och det är inte samma fråga.
+ *
+ * Enheterna får skilja sig: "250 g kostar 62 kr, vad kostar ett kilo?" räknas
+ * om via huvudenheten, precis som jämförpriset gör. Mäter de olika saker
+ * faller räkningen i stället för att svara fel.
+ */
+export function unitPrice(
+  kand: UnitPriceKand,
+  onskad: UnitPriceOnskad,
+  alternativ?: UnitPriceAlternativ,
+): Resultat {
+  const valuta = alternativ?.valuta ?? 'kr';
+  kravTal(kand.pris, 'Priset');
+  if (kand.pris < 0) {
+    throw new RaknefelError('ogiltigt-tal', 'Priset kan inte vara negativt.');
+  }
+  kravPositivt(kand.mangd, 'Mängden priset gäller');
+  kravPositivt(onskad.mangd, 'Mängden du vill veta priset för');
+
+  const kandEnhet = slaUppEnhet(kand.enhet ?? 'st');
+  const onskadEnhet = slaUppEnhet(onskad.enhet ?? kand.enhet ?? 'st');
+  if (kandEnhet.dimension !== onskadEnhet.dimension) {
+    throw new RaknefelError(
+      'olika-dimensioner',
+      `${kandEnhet.namn} och ${onskadEnhet.namn} mäter inte samma sak.`,
+    );
+  }
+
+  const omKand = tillHuvudenhet({ value: kand.mangd, unit: kandEnhet.namn }, alternativ?.perPackage);
+  const omOnskad = tillHuvudenhet(
+    { value: onskad.mangd, unit: onskadEnhet.namn },
+    alternativ?.perPackage,
+  );
+  if (!('value' in omKand) || !('value' in omOnskad)) {
+    throw new RaknefelError(
+      'ogiltigt-uttryck',
+      'En förpackning har ingen fast storlek, så priset behöver antal styck.',
+    );
+  }
+  if (omKand.value <= 0) {
+    throw new RaknefelError('division-med-noll', 'Mängden priset gäller blir noll.');
+  }
+
+  const perEnhet = kand.pris / omKand.value;
+  const total = perEnhet * omOnskad.value;
+  const huvudenhet = omKand.unit;
+  const prisenhet = `${valuta}/${huvudenhet}`;
+
+  const steps: Steg[] = [
+    {
+      nr: 1,
+      etikett: `Pris per ${huvudenhet}`,
+      uttryck: `${pengar(kand.pris, valuta)} ${valuta} ÷ ${formatMangd(omKand.value, huvudenhet)}`,
+      resultat: `${pengar(perEnhet, valuta)} ${prisenhet}`,
+    },
+    {
+      nr: 2,
+      etikett: `Pris för ${formatMangd(onskad.mangd, onskadEnhet.namn)}`,
+      uttryck: `${pengar(perEnhet, valuta)} ${prisenhet} × ${formatMangd(omOnskad.value, huvudenhet)}`,
+      resultat: `${pengar(total, valuta)} ${valuta}`,
+    },
+  ];
+
+  const rader: Rad[] = [
+    {
+      etikett: `Per ${huvudenhet}`,
+      formatted: pengar(perEnhet, valuta),
+      unit: prisenhet,
+      value: perEnhet,
+    },
+  ];
+
+  const fakta: Faktum[] = [
+    {
+      nyckel: 'perEnhet',
+      betydelse: `Pris per ${huvudenhet}`,
+      value: perEnhet,
+      formatted: pengar(perEnhet, valuta),
+      unit: prisenhet,
+    },
+    {
+      nyckel: 'mangd',
+      betydelse: 'Mängden du frågar om',
+      value: onskad.mangd,
+      formatted: formatMangd(onskad.mangd, onskadEnhet.namn),
+      unit: onskadEnhet.namn,
+    },
+    {
+      nyckel: 'resultat',
+      betydelse: `Pris för ${formatMangd(onskad.mangd, onskadEnhet.namn)}`,
+      value: total,
+      formatted: pengar(total, valuta),
+      unit: valuta,
+    },
+  ];
+
+  return {
+    value: total,
+    unit: valuta,
+    formatted: pengar(total, valuta),
+    betydelse: `Pris för ${formatMangd(onskad.mangd, onskadEnhet.namn)}`,
+    steps,
+    villkor: [`Samma pris per ${huvudenhet} som ${formatMangd(kand.mangd, kandEnhet.namn)}`],
+    rader,
+    fakta,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 31. Dela kostnader
 // ---------------------------------------------------------------------------
 

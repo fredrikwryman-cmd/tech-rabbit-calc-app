@@ -2,7 +2,7 @@
   "name": "tech-rabbit-calc-app",
   "private": true,
   "version": "0.1.0",
-  "description": "Tech Rabbit Calc — appen. Servern ligger i ett privat repo.",
+  "description": "TechRabbit Calc — appen. Servern ligger i ett privat repo.",
   "workspaces": [
     "apps/mobile",
     "packages/engine"

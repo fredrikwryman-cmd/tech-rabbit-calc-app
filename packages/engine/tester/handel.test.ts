@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import {
   breakEvenUnits,
   discount,
+  type Period,
   priceForTarget,
   RaknefelError,
   recurringCost,
@@ -143,10 +144,32 @@ test('recurringCost: en kostnad per manad omraknad till ar', () => {
 });
 
 test('recurringCost: veckor och dagar raknas via aret', () => {
+  // En vecka ar 365/7 av ett ar, sa 52 kr i veckan blir 52 x 52,142857 kr.
   const r = recurringCost([{ belopp: 52, period: 'vecka' }], 'ar');
-  assert.equal(r.formatted, '2 704,00');
+  assert.equal(r.formatted, '2 711,43');
   const dag = recurringCost([{ belopp: 365, period: 'dag' }], 'ar');
   assert.equal(dag.formatted, '133 225,00');
+});
+
+/**
+ * Perioderna far inte saga emot varandra (direktiv 35).
+ *
+ * Samma pengar, uttryckta per dag, per vecka eller per manad, ska ge samma
+ * arssumma. Med 52 veckor pa ett ar gjorde de inte det: 250 kr i veckan gav
+ * 13 000 kr medan samma belopp per dag gav 13 035,71 kr.
+ */
+test('recurringCost: dag, vecka och manad ger samma ar', () => {
+  const perAr = (belopp: number, period: Period): number =>
+    recurringCost([{ belopp, period }], 'ar').value;
+  const ar = 13035.714285714286;
+  assert.ok(Math.abs(perAr(ar / 365, 'dag') - ar) < 1e-6, 'dag mot ar');
+  assert.ok(Math.abs(perAr(ar / (365 / 7), 'vecka') - ar) < 1e-6, 'vecka mot ar');
+  assert.ok(Math.abs(perAr(ar / 12, 'manad') - ar) < 1e-6, 'manad mot ar');
+  // 250 kr i veckan: facit raknat for hand, 250 x 365 / 7.
+  assert.ok(Math.abs(perAr(250, 'vecka') - ar) < 1e-6);
+  // 35 kr om dagen, per manad: 35 x 365 / 12.
+  const manad = recurringCost([{ belopp: 35, period: 'dag' }], 'manad');
+  assert.ok(Math.abs(manad.value - 1064.5833333333333) < 1e-6, `fick ${manad.value}`);
 });
 
 test('recurringCost: kantfall - tom lista och negativt belopp', () => {

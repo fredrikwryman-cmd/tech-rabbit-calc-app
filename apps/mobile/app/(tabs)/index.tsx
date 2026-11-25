@@ -105,7 +105,12 @@ function RaknaSkarm(): ReactNode {
   const { laggTill } = useApp();
   const router = useRouter();
   /** 21d: frågan Rabbit AI lämnade över. `n` gör att samma fråga kan komma igen. */
-  const parametrar = useLocalSearchParams<{ raknaPa?: string; n?: string }>();
+  const parametrar = useLocalSearchParams<{
+    raknaPa?: string;
+    n?: string;
+    /** Direktiv 36: id:t till den tolkning chatten redan gjort av frågan. */
+    tolkningsId?: string;
+  }>();
 
   const [fraga, setFraga] = useState('');
   const [fokus, setFokus] = useState(false);
@@ -184,7 +189,10 @@ function RaknaSkarm(): ReactNode {
     setSkrivSjalv(false);
     setAndrat(null);
     setTidigare([]);
-    void raknaFraga(text);
+    // Direktiv 36: id:t skickas med FÖRSTA anropet, och bara det. Svarar
+    // servern med en följdfråga är användarens svar en ny upplysning, och då
+    // ska frågan tolkas om — inte köras på chattens tolkning igen.
+    void raknaFraga(text, true, parametrar.tolkningsId);
     // raknaFraga ar stabil nog: den laser ingen state som behover bevakas har.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parametrar.raknaPa, parametrar.n]);
@@ -335,7 +343,11 @@ function RaknaSkarm(): ReactNode {
    * Fältet sätts först, men React hinner inte skriva om `fraga` innan `rakna`
    * läser den. Därför tar den här texten som argument.
    */
-  async function raknaFraga(text: string, visaIFalt = true): Promise<void> {
+  async function raknaFraga(
+    text: string,
+    visaIFalt = true,
+    tolkningsId?: string,
+  ): Promise<void> {
     // Räkna vidare skickar hela frågan med sina tillägg, men fältet ska
     // fortsätta visa den ursprungliga frågan (05d).
     if (visaIFalt) setFraga(text);
@@ -352,7 +364,10 @@ function RaknaSkarm(): ReactNode {
       if (aktuell()) setLage((l) => (l.sort === 'raknar' ? { sort: 'raknar', steg: 3 } : l));
     }, steg3Ms);
     try {
-      const resultat = await tolkare.tolka(text, { harNat: natet });
+      const resultat = await tolkare.tolka(text, {
+        harNat: natet,
+        ...(tolkningsId === undefined || tolkningsId === '' ? {} : { tolkningsId }),
+      });
       if (!aktuell()) return;
       tillampa(resultat, text);
     } finally {
@@ -757,6 +772,10 @@ function RaknaSkarm(): ReactNode {
           {...(svar.uppslag !== undefined && svar.uppslag.length > 0
             ? { uppslag: svar.uppslag }
             : {})}
+          // Direktiv 36: hade motorn inget räknesätt svarade Rabbit AI själv.
+          // Sheeten märker då svaret, och visar ingen väg att räkna om: det
+          // finns inget motorsvar att räkna om på.
+          {...(svar.kalla !== undefined ? { kalla: svar.kalla } : {})}
           onRattaUppslag={(fragan, varde) => {
             // Direktiv 32: ett uppslaget värde är ett antagande. Rättelsen
             // går tillbaka som ett vanligt följdsvar, och servern räknar om

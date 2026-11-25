@@ -75,6 +75,16 @@ export interface Svar {
   readonly forklaring: string;
   /** Direktiv 32: värden tjänsten slog upp. Tomt när inget slogs upp. */
   readonly uppslag?: readonly Uppslagsbesked[];
+  /**
+   * Direktiv 36: vem som räknade.
+   *
+   * Saknas fältet har räknemotorn räknat, som i alla andra svar. Står det
+   * 'rabbit-ai' hade motorn inget räknesätt för frågan, och Rabbit AI svarade
+   * själv med uträkningen steg för steg. Resultatvyn märker det synligt, och
+   * märkningen är inte valfri: ett modellsvar får aldrig se ut som ett
+   * kontrollräknat.
+   */
+  readonly kalla?: 'rabbit-ai';
 }
 
 /**
@@ -122,6 +132,14 @@ export interface Fragekontext {
   readonly foljdsvar?: readonly Foljdsvar[];
   /** F05: tolkningen servern redan gjort, oförändrad tillbaka. */
   readonly tidigareTolkning?: unknown;
+  /**
+   * Direktiv 36: id:t till den tolkning chatten redan gjort av frågan.
+   *
+   * Appen skickar bara id:t, aldrig tolkningen — servern litar inte på
+   * klienten. Servern slår upp tolkningen och kör bedömningen på den, så att
+   * chatten och Räkna inte kan landa i olika tolkningar av samma mening.
+   */
+  readonly tolkningsId?: string;
   /** Om telefonen har nät. Utan nät blir svaret alltid 'ingen-anslutning'. */
   readonly harNat: boolean;
 }

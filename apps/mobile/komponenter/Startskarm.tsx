@@ -1,7 +1,7 @@
 /**
  * Startskärmen, vy 22.
  *
- * KOMPONENTER.md v4: `bg` med symbolen 104 pt och "Tech Rabbit Calc" 28/900,
+ * KOMPONENTER.md v4: `bg` med symbolen 104 pt och "TechRabbit Calc" 28/900,
  * 16 pt mellanrum, centrerat.
  *
  * RORELSE-HAPTIK.md v4: ingen animation. Skärmen byts till appen med en
@@ -43,11 +43,11 @@ export function Startskarm({ children }: { readonly children: ReactNode }): Reac
           exiting={FadeOut.duration(rorelse.reducerad ? REDUCERAD_MS : YTA_MS)}
           pointerEvents="none"
           accessible
-          accessibilityLabel="Tech Rabbit Calc"
+          accessibilityLabel="TechRabbit Calc"
           style={[styles.yta, { backgroundColor: farg['bg'] }]}
         >
           <Logotyp storlek={104} />
-          <Text style={[styles.namn, { color: farg['text'] }]}>Tech Rabbit Calc</Text>
+          <Text style={[styles.namn, { color: farg['text'] }]}>TechRabbit Calc</Text>
         </Animated.View>
       )}
     </View>

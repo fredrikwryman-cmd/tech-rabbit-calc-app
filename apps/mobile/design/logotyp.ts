@@ -1,5 +1,5 @@
 /**
- * Tech Rabbit-symbolen, uttagen ur design/kalla/TechRabbit-logo-v1/symbol/.
+ * TechRabbit-symbolen, uttagen ur design/kalla/TechRabbit-logo-v1/symbol/.
  *
  * Genererad fil. Ändra inte för hand: ändra SVG:n i design/ och kör om
  * verktyget. Färgerna nedan är de ur källan; komponenten målar om dem per tema.

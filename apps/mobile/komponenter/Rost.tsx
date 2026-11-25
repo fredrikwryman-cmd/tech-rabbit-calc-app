@@ -276,7 +276,7 @@ export function Rostbesked({
         : 'Det gick inte att höra';
   const text =
     lage === 'nekad'
-      ? 'Appen får inte använda mikrofonen. Slå på Mikrofon och Taligenkänning för Tech Rabbit Calc i iOS-inställningarna. Du kan skriva frågan som vanligt så länge.'
+      ? 'Appen får inte använda mikrofonen. Slå på Mikrofon och Taligenkänning för TechRabbit Calc i iOS-inställningarna. Du kan skriva frågan som vanligt så länge.'
       : lage === 'saknas'
         ? 'Taligenkänningen är en del av appen och finns inte i Expo Go. Den fungerar i testappen och i den färdiga appen. Skriv frågan så länge.'
         : 'Taligenkänningen avbröts. Försök igen, eller skriv frågan.';

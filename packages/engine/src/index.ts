@@ -1,5 +1,5 @@
 /**
- * Tech Rabbit AI Kalkylator — räknemotorn.
+ * TechRabbit AI Kalkylator — räknemotorn.
  *
  * Ren TypeScript utan beroenden. AI:n tolkar frågan till strukturerad data och
  * förklarar svaret efteråt. All räkning sker här, och bara här.
@@ -73,6 +73,10 @@ export {
   type SplitCostAlternativ,
   timeShift,
   type TimeShiftAlternativ,
+  type UnitPriceAlternativ,
+  type UnitPriceKand,
+  type UnitPriceOnskad,
+  unitPrice,
   type Utlagg,
   type Vara,
   workTime,

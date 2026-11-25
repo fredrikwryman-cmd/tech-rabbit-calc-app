@@ -261,7 +261,7 @@ export function Premiumkort({ onPress }: { readonly onPress: () => void }): Reac
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Tech Rabbit kan mer än att räkna. Chatta med Rabbit AI om vad du vill. Gratis. Starta chatten"
+      accessibilityLabel="TechRabbit kan mer än att räkna. Chatta med Rabbit AI om vad du vill. Gratis. Starta chatten"
       onPress={() => {
         haptik('latt');
         onPress();
@@ -289,7 +289,7 @@ export function Premiumkort({ onPress }: { readonly onPress: () => void }): Reac
         </View>
       </View>
       <Text maxFontSizeMultiplier={1.5} style={[styles.premiumtitel, { color: farg['text'] }]}>
-        Tech Rabbit kan mer än att räkna
+        TechRabbit kan mer än att räkna
       </Text>
       <Text maxFontSizeMultiplier={1.6} style={[styles.premiumtext, { color: farg['muted'] }]}>
         Chatta med Rabbit AI om vad du vill. Gratis.

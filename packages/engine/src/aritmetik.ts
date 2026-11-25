@@ -195,8 +195,9 @@ class Tolk {
  *
  * @param uttryck  uttrycket med tecken, inte ord
  * @param unit     enhet att visa efter svaret, t.ex. "kr". Utan värde: ingen.
+ * @param etikett  vad talet betyder, ur frågans egna ord. Utan värde: "Svar".
  */
-export function arithmetic(uttryck: string, unit = ''): Resultat {
+export function arithmetic(uttryck: string, unit = '', etikett?: string): Resultat {
   if (typeof uttryck !== 'string' || uttryck.trim() === '') {
     felaktigt('Det finns inget uttryck att räkna på.');
   }
@@ -221,5 +222,9 @@ export function arithmetic(uttryck: string, unit = ''): Resultat {
         ]
       : tolk.steg;
 
-  return { value: varde, unit, steps, formatted: formatTal(varde), betydelse: 'Svar' };
+  // Direktiv 36: har frågan sagt vad talet är står det över svaret i stället
+  // för ordet "Svar". Ren aritmetik är det enda räknesätt som inte kan hämta
+  // sin betydelse ur sig självt — ett uttryck in, ett tal ut.
+  const betydelse = typeof etikett === 'string' && etikett.trim() !== '' ? etikett.trim() : 'Svar';
+  return { value: varde, unit, steps, formatted: formatTal(varde), betydelse };
 }

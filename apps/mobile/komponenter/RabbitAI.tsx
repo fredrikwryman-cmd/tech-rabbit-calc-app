@@ -78,7 +78,11 @@ export interface RabbitAIProps {
   readonly onSkicka: (text?: string) => void;
   readonly onStoppa: () => void;
   readonly onNyttSamtal: () => void;
-  readonly onRaknaPa: (fraga: string) => void;
+  /**
+   * Direktiv 36: id:t följer med frågan, när servern lämnade ett. Räkna
+   * skickar det vidare och slipper tolka om samma mening.
+   */
+  readonly onRaknaPa: (fraga: string, tolkningsId?: string) => void;
   readonly onBytTillRakna: () => void;
   /** 21f: de sparade samtalen, nyast först. */
   readonly samtal: readonly Samtal[];
@@ -229,7 +233,10 @@ export function RabbitAI(props: RabbitAIProps): ReactNode {
                 stoppat={m.stoppat === true}
                 strommar={false}
                 {...(m.raknaPa !== undefined
-                  ? { raknaPa: m.raknaPa, onRaknaPa: () => onRaknaPa(m.raknaPa as string) }
+                  ? {
+                      raknaPa: m.raknaPa,
+                      onRaknaPa: () => onRaknaPa(m.raknaPa as string, m.tolkningsId),
+                    }
                   : {})}
                 {...(m.kallor !== undefined && m.kallor.length > 0 ? { kallor: m.kallor } : {})}
               />

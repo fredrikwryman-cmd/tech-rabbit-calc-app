@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Tech Rabbit Calc",
+    "name": "Calc",
     "slug": "tech-rabbit-ai-kalkylator",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -15,9 +15,9 @@
         "tinted": "./assets/ikon/ikon-tonad.png"
       },
       "infoPlist": {
-        "NSPhotoLibraryAddUsageDescription": "Tech Rabbit Calc sparar din uträkning som bild i Bilder när du väljer Spara bild i delningsmenyn.",
-        "NSPhotoLibraryUsageDescription": "Tech Rabbit Calc läser inga av dina bilder. Texten krävs av iOS eftersom delningen av uträkningen kan gå till Bilder.",
-        "NSMicrophoneUsageDescription": "Tech Rabbit Calc använder mikrofonen när du trycker på mikrofonknappen, så att du kan prata in din fråga i stället för att skriva den.",
+        "NSPhotoLibraryAddUsageDescription": "TechRabbit Calc sparar din uträkning som bild i Bilder när du väljer Spara bild i delningsmenyn.",
+        "NSPhotoLibraryUsageDescription": "TechRabbit Calc läser inga av dina bilder. Texten krävs av iOS eftersom delningen av uträkningen kan gå till Bilder.",
+        "NSMicrophoneUsageDescription": "TechRabbit Calc använder mikrofonen när du trycker på mikrofonknappen, så att du kan prata in din fråga i stället för att skriva den.",
         "NSSpeechRecognitionUsageDescription": "Talet görs om till text så att frågan hamnar i fältet. Inget ljud sparas och inget ljud lämnar telefonen.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -58,7 +58,7 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Tech Rabbit Calc använder mikrofonen när du trycker på mikrofonknappen, så att du kan prata in din fråga i stället för att skriva den.",
+          "microphonePermission": "TechRabbit Calc använder mikrofonen när du trycker på mikrofonknappen, så att du kan prata in din fråga i stället för att skriva den.",
           "speechRecognitionPermission": "Talet görs om till text så att frågan hamnar i fältet. Inget ljud sparas och inget ljud lämnar telefonen.",
           "androidSpeechServicePackages": [
             "com.google.android.googlequicksearchbox"

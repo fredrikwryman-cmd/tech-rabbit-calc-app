@@ -1,4 +1,4 @@
-# Tech Rabbit Calc — appen
+# TechRabbit Calc — appen
 
 Räkneassistenten för iOS och Android. En fråga på vanlig svenska in, ett
 räknat svar ut.

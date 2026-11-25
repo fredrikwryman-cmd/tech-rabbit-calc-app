@@ -447,10 +447,20 @@ export function savingsPlan(mal: number, alternativ?: SavingsPlanAlternativ): Re
 
 export type Period = 'dag' | 'vecka' | 'manad' | 'ar';
 
-/** Hur många av perioden som går på ett år. 365 dagar, 52 veckor, 12 månader. */
+/**
+ * Hur många av perioden som går på ett år.
+ *
+ * Ett år är 365 dagar och 12 månader. Då är en vecka 365/7 av ett år, inte
+ * 1/52: med 52 blev året 364 dagar långt i veckor och 365 dagar långt i
+ * dagar, och då sa appen emot sig själv. Uppmätt i direktiv 35: 250 kr i
+ * veckan gav 13 000 kr/år medan 35,71 kr om dagen — samma pengar — gav
+ * 13 035,71 kr/år. En månad är av samma skäl 365/12 = 30,42 dagar, inte 30.
+ *
+ * Omräkningen går alltid via året, så varje par av perioder blir konsekvent.
+ */
 const PER_AR: Readonly<Record<Period, number>> = {
   dag: 365,
-  vecka: 52,
+  vecka: 365 / 7,
   manad: 12,
   ar: 1,
 };
@@ -552,7 +562,7 @@ export function recurringCost(
     formatted: pengar(summa, valuta),
     betydelse: `Summa per ${PERIODNAMN[till]}`,
     steps,
-    villkor: ['Räknat med 12 månader, 52 veckor och 365 dagar på ett år'],
+    villkor: ['Räknat med 12 månader och 365 dagar på ett år, alltså 30,42 dagar i månaden'],
     ...(poster.length > 1 ? { rader } : {}),
     fakta,
   };

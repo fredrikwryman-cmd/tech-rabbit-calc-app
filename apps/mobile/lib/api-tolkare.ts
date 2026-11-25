@@ -272,6 +272,10 @@ export function lasSvar(v: unknown): Tolkningssvar {
       etikett: text(d['etikett']) ?? resultat.betydelse,
       resultat,
       forklaring,
+      // Direktiv 36: bara det exakta värdet räknas som en märkning. Allt
+      // annat — tomt, okänt, påhittat — betyder motorn, och ett motorsvar
+      // visas utan märkning.
+      ...(d['kalla'] === 'rabbit-ai' ? { kalla: 'rabbit-ai' as const } : {}),
       // Ett uppslag som inte går att läsa tas bort, precis som villkorsraden:
       // ett resultat utan rättbart villkor är bättre än inget resultat.
       ...(Array.isArray(d['uppslag']) && d['uppslag'].flatMap(lasUppslag).length > 0
@@ -315,6 +319,10 @@ export const apiTolkare: Tolkare = {
             : {}),
           ...(kontext.tidigareTolkning !== undefined
             ? { tidigareTolkning: kontext.tidigareTolkning }
+            : {}),
+          // Direktiv 36: id:t till chattens tolkning, när frågan kom därifrån.
+          ...(kontext.tolkningsId !== undefined
+            ? { tolkningsId: kontext.tolkningsId }
             : {}),
         }),
         signal: styrning.signal,

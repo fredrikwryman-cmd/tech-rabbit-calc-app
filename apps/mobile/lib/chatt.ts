@@ -68,6 +68,15 @@ export interface Meddelande {
   readonly text: string;
   /** Frågan som ska flyttas till Räkna, när svaret lämnade över (12c). */
   readonly raknaPa?: string;
+  /**
+   * Direktiv 36: id:t till tolkningen servern redan gjort av `raknaPa`.
+   *
+   * Följer med till Räkna, som skickar det vidare till /api/ask. Då räknar
+   * Räkna på samma tolkning som chatten provade, i stället för att tolka om.
+   * Id:t gäller 15 minuter; ett gammalt samtal bär ett id som gått ut, och
+   * då tolkas frågan om som förut.
+   */
+  readonly tolkningsId?: string;
   /** Sant när användaren tryckte Stoppa mitt i svaret. */
   readonly stoppat?: boolean;
   /** Källorna svaret slogs upp i, när Rabbit AI sökte på webben. */
@@ -96,6 +105,7 @@ function lasMeddelande(v: unknown): Meddelande[] {
       roll: m['roll'],
       text: m['text'],
       ...(typeof m['raknaPa'] === 'string' ? { raknaPa: m['raknaPa'] } : {}),
+      ...(typeof m['tolkningsId'] === 'string' ? { tolkningsId: m['tolkningsId'] } : {}),
       ...(m['stoppat'] === true ? { stoppat: true } : {}),
       // Källorna sparas med samtalet och läses tillbaka genom samma
       // kontroll som strömmen: en trasig post blir ingen rad.
@@ -158,6 +168,8 @@ export type Chattslut =
   | {
       readonly sort: 'klart';
       readonly raknaPa?: string;
+      /** Direktiv 36: id:t till serverns tolkning av `raknaPa`. */
+      readonly tolkningsId?: string;
       /** Källorna, när svaret slogs upp på webben. */
       readonly kallor?: readonly Kalla[];
     }
@@ -206,6 +218,7 @@ export function stromma(
   let avslutad = false;
   let stoppad = false;
   let raknaPa: string | undefined;
+  let tolkningsId: string | undefined;
   let kallor: readonly Kalla[] = [];
 
   const avsluta = (slut: Chattslut): void => {
@@ -218,8 +231,12 @@ export function stromma(
   const las = (): void => {
     for (const { namn, kropp } of lasaren.las(xhr.responseText)) {
       if (namn === 'text' && typeof kropp['text'] === 'string') lyssnare.text(kropp['text']);
-      else if (namn === 'rakna' && typeof kropp['raknaPa'] === 'string')
+      else if (namn === 'rakna' && typeof kropp['raknaPa'] === 'string') {
         raknaPa = kropp['raknaPa'];
+        // Id:t kan utebli: servern kunde inte spara tolkningen, och då
+        // tolkar Räkna om som förut.
+        if (typeof kropp['tolkningsId'] === 'string') tolkningsId = kropp['tolkningsId'];
+      }
       else if (namn === 'sokning') lyssnare.soker?.();
       else if (namn === 'kallor') kallor = kallorUr(kropp);
       else if (namn === 'fel') avsluta({ sort: 'fel', typ: 'server' });
@@ -250,6 +267,7 @@ export function stromma(
     avsluta({
       sort: 'klart',
       ...(raknaPa === undefined ? {} : { raknaPa }),
+      ...(tolkningsId === undefined ? {} : { tolkningsId }),
       ...(kallor.length > 0 ? { kallor } : {}),
     });
   };

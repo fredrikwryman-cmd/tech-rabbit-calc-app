@@ -1,5 +1,5 @@
 /**
- * Tech Rabbit-symbolen.
+ * TechRabbit-symbolen.
  *
  * Banorna kommer ur design/kalla/TechRabbit-logo-v1/symbol/ via
  * design/logotyp.ts. Kroppen får temats textfärg, detaljen den gröna.
@@ -26,7 +26,7 @@ export function Logotyp({ storlek = STANDARDSTORLEK }: { readonly storlek?: numb
       height={(storlek * hojd) / bredd}
       viewBox={LOGO_VIEWBOX}
       accessibilityRole="image"
-      accessibilityLabel="Tech Rabbit"
+      accessibilityLabel="TechRabbit"
     >
       {LOGO_BANOR.map((bana, i) => (
         <Path

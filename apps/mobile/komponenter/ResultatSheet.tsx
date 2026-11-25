@@ -84,6 +84,15 @@ export interface ResultatSheetProps {
   readonly uppslag?: readonly Uppslaget[];
   /** Rättelsen går tillbaka som ett följdsvar på uppslagets fråga. */
   readonly onRattaUppslag?: (fraga: string, varde: string) => void;
+  /**
+   * Direktiv 36: vem som räknade.
+   *
+   * Saknas fältet har räknemotorn räknat. Står det 'rabbit-ai' hade motorn
+   * inget räknesätt för frågan, och Rabbit AI svarade själv. Då står en
+   * märkning över talet, och "Räkna om" visas inte: det finns inget
+   * motorsvar att räkna om på.
+   */
+  readonly kalla?: 'rabbit-ai';
 }
 
 export function ResultatSheet(props: ResultatSheetProps): ReactNode {
@@ -103,6 +112,7 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
     onForegaende,
     uppslag = [],
     onRattaUppslag,
+    kalla,
   } = props;
   const { farg } = useTema();
   const rorelse = useRorelse();
@@ -165,7 +175,16 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
     return String(MOMSSATSER[(i + 1) % MOMSSATSER.length] ?? MOMSSATSER[0]);
   }
 
-  const kanRaknaOm = Object.keys(andrade).length > 0;
+  /**
+   * Direktiv 36: Rabbit AI svarade, inte motorn.
+   *
+   * Hela skillnaden mot ett vanligt svar är att det INTE är kontrollräknat,
+   * och det ska stå där svaret står — inte i en fotnot längst ner.
+   */
+  const franRabbitAi = kalla === 'rabbit-ai';
+
+  // Ett modellsvar går inte att räkna om: det finns inga fakta motorn äger.
+  const kanRaknaOm = !franRabbitAi && Object.keys(andrade).length > 0;
 
   /**
    * Vilken resultatvy svaret ska visas i (30-33), eller vy 05 som förut.
@@ -248,6 +267,25 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
                   style={[styles.andrattext, { color: farg['onGreenSoft'] }]}
                 >
                   {`Ändrat: ${andrat}`}
+                </Text>
+              </Animated.View>
+            ) : null}
+
+            {/*
+              Direktiv 36: märkningen står före talet, inte efter.
+              Den som läser svaret ska veta vem som räknade det INNAN siffran
+              läses, inte efteråt.
+            */}
+            {franRabbitAi ? (
+              <Animated.View
+                entering={FadeIn.duration(tid)}
+                style={[styles.markning, { backgroundColor: farg['warnSoft'] }]}
+              >
+                <Text
+                  maxFontSizeMultiplier={1.6}
+                  style={[TEXT['secondary'], styles.markningstext, { color: farg['warnText'] }]}
+                >
+                  Svar från Rabbit AI, inte kontrollräknat av räknemotorn
                 </Text>
               </Animated.View>
             ) : null}
@@ -474,7 +512,15 @@ export function ResultatSheet(props: ResultatSheetProps): ReactNode {
           </ScrollView>
 
           <View style={styles.fot}>
-            <PrimarKnapp titel="Räkna vidare" onPress={onRaknaVidare} />
+            {/*
+              "Räkna vidare" lägger till en ändring och låter MOTORN räkna om
+              hela frågan. Ett svar motorn inte kunde räkna går inte att
+              bygga vidare på, så knappen vore en återvändsgränd. Ny fråga
+              och Dela ligger kvar.
+            */}
+            {franRabbitAi ? null : (
+              <PrimarKnapp titel="Räkna vidare" onPress={onRaknaVidare} />
+            )}
             <View style={styles.fotrad}>
               <LitenKnapp
                 titel="Dela"
@@ -632,6 +678,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   andrattext: { fontSize: 12, fontFamily: 'Archivo_800ExtraBold', includeFontPadding: false },
+
+  /*
+   * Direktiv 36: märkningen är en hel rad, inte en liten pill.
+   *
+   * Ett Ändrat-märke är en upplysning man kan missa. Att svaret inte är
+   * kontrollräknat får man inte missa, så raden är lika bred som kortet och
+   * texten är läsbar i brödtextstorlek.
+   */
+  markning: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11 },
+  markningstext: { includeFontPadding: false },
 
   prickrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   prick: { width: 7, height: 7, borderRadius: 4 },

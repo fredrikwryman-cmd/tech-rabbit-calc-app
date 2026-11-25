@@ -167,6 +167,11 @@ function RabbitAiSkarm(): ReactNode {
             ...(slut.sort === 'klart' && slut.raknaPa !== undefined
               ? { raknaPa: slut.raknaPa }
               : {}),
+            // Direktiv 36: id:t sparas med meddelandet, så att kortet
+            // "Räkna på det" bär det också när tråden öppnas igen.
+            ...(slut.sort === 'klart' && slut.tolkningsId !== undefined
+              ? { tolkningsId: slut.tolkningsId }
+              : {}),
             ...(slut.sort === 'stoppat' ? { stoppat: true } : {}),
             // Källorna sparas med samtalet, så en gammal tråd bär dem kvar.
             ...(slut.sort === 'klart' && slut.kallor !== undefined && slut.kallor.length > 0
@@ -205,13 +210,19 @@ function RabbitAiSkarm(): ReactNode {
           onSkicka={skicka}
           onStoppa={() => stromningen.current?.stoppa()}
           onNyttSamtal={nyttSamtal}
-          onRaknaPa={(fraga) => {
+          onRaknaPa={(fraga, tolkningsId) => {
             // Räkna äger räkningen. Frågan följer med som parameter, och
-            // nonsen gör att samma fråga går att skicka igen.
+            // nonsen gör att samma fråga går att skicka igen. Direktiv 36:
+            // id:t till serverns tolkning följer med, så att Räkna räknar på
+            // samma tolkning som chatten provade.
             stromningen.current?.stoppa();
             router.navigate({
               pathname: '/',
-              params: { raknaPa: fraga, n: String(Date.now()) },
+              params: {
+                raknaPa: fraga,
+                n: String(Date.now()),
+                ...(tolkningsId === undefined ? {} : { tolkningsId }),
+              },
             });
           }}
           onBytTillRakna={() => router.navigate('/')}

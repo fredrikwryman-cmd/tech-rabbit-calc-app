@@ -28,7 +28,7 @@ export function AppHuvud(): ReactNode {
   return (
     <View style={styles.huvud} accessibilityRole="header">
       <Pressable
-        accessibilityLabel="Tech Rabbit Calc"
+        accessibilityLabel="TechRabbit Calc"
         accessibilityHint="Långtryck visar vilken version som körs."
         onLongPress={() => setVisarVersion(true)}
         delayLongPress={700}
@@ -36,7 +36,7 @@ export function AppHuvud(): ReactNode {
         <Logotyp />
       </Pressable>
       <Text style={[TEXT['appName'], styles.appnamn, { color: farg['text'] }]}>
-        Tech Rabbit Calc
+        TechRabbit Calc
       </Text>
       {visarVersion ? <Versionsruta onStang={() => setVisarVersion(false)} /> : null}
     </View>

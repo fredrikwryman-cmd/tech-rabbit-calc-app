@@ -201,3 +201,31 @@ test('breakEven: utan forpackning ar det fortfarande tva steg', () => {
   assert.equal(r.steps.length, 2);
   assert.equal(r.steps[0]?.uttryck, '1 kg − 300 g');
 });
+
+// ---------------------------------------------------------------------------
+// Direktiv 36: etikett och enhet på ren aritmetik
+// ---------------------------------------------------------------------------
+
+test('aritmetik utan etikett heter Svar, som förut', () => {
+  const svar = arithmetic('17 × 23');
+  assert.equal(svar.betydelse, 'Svar');
+  assert.equal(svar.unit, '');
+  assert.equal(svar.value, 391);
+});
+
+test('aritmetik med etikett och enhet säger vad talet är', () => {
+  // "ja handlade 3 paket kaffe för 89 kr styck, vad blev det?"
+  const svar = arithmetic('3 × 89', 'kr', 'Pris för 3 paket kaffe');
+  assert.equal(svar.betydelse, 'Pris för 3 paket kaffe');
+  assert.equal(svar.unit, 'kr');
+  assert.equal(svar.formatted, '267');
+});
+
+test('en tom eller blank etikett faller tillbaka på Svar', () => {
+  assert.equal(arithmetic('1 + 1', 'kr', '').betydelse, 'Svar');
+  assert.equal(arithmetic('1 + 1', 'kr', '   ').betydelse, 'Svar');
+});
+
+test('etiketten trimmas, så att raden inte börjar med blanksteg', () => {
+  assert.equal(arithmetic('1 + 1', '', '  Antal rader  ').betydelse, 'Antal rader');
+});
